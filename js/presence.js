@@ -39,8 +39,23 @@ export function broadcastPresence(immediate) {
   store.presenceUpdateTimer = setTimeout(fire, immediate ? 0 : 1000);
 }
 
+// Merge a peer (from a broadcast payload) into onlineUsers.
+function upsertPeer(peer) {
+  if (!peer || !peer.id) return;
+  const i = store.onlineUsers.findIndex((u) => u.id === peer.id);
+  if (i === -1) store.onlineUsers.push(peer);
+  else store.onlineUsers[i] = Object.assign({}, store.onlineUsers[i], peer);
+}
+
+function currentTrackId() {
+  const t = store.currentIndex !== -1 ? store.queue[store.currentIndex] : null;
+  return t ? t.id : null;
+}
+
 export function initPresence() {
-  store.presenceChannel = store.db.channel('listeners-room', { config: { presence: { key: DEVICE_ID } } });
+  store.presenceChannel = store.db.channel('listeners-room', {
+    config: { presence: { key: DEVICE_ID }, broadcast: { self: false } }
+  });
   store.presenceChannel
     .on('presence', { event: 'sync' }, () => {
       const raw = store.presenceChannel.presenceState();
@@ -61,8 +76,48 @@ export function initPresence() {
       }
       render();
     })
+    // Join handshake (broadcast): a newcomer announces arrival; existing
+    // members reply with their current playback state so the newcomer learns
+    // "where active now". Replies never re-trigger a join, so no loop.
+    .on('broadcast', { event: 'join' }, ({ payload }) => {
+      if (!payload || !payload.peer) return;
+      upsertPeer(payload.peer);
+      store.presenceChannel.send({
+        type: 'broadcast',
+        event: 'reply',
+        payload: {
+          peer: Object.assign({ id: DEVICE_ID }, myPresencePayload()),
+          state: {
+            track_id: currentTrackId(),
+            position_seconds: store.currentTime,
+            is_playing: store.isPlaying
+          }
+        }
+      });
+      render();
+    })
+    .on('broadcast', { event: 'reply' }, ({ payload }) => {
+      if (!payload || !payload.peer) return;
+      upsertPeer(payload.peer);
+      // Catch the newcomer up to the active playback so they know where it is.
+      const s = payload.state;
+      if (s && s.track_id && store.currentIndex === -1) {
+        const idx = store.queue.findIndex((t) => t.id === s.track_id);
+        if (idx !== -1) loadTrack(idx, false, s.position_seconds || 0);
+      }
+      render();
+    })
     .subscribe(async (status) => {
-      if (status === 'SUBSCRIBED') broadcastPresence(true);
+      if (status === 'SUBSCRIBED') {
+        broadcastPresence(true);
+        // Announce arrival so existing members send us their current state.
+        // Sent only here (not on receiving replies) so the process runs once.
+        store.presenceChannel.send({
+          type: 'broadcast',
+          event: 'join',
+          payload: { peer: Object.assign({ id: DEVICE_ID }, myPresencePayload()) }
+        });
+      }
     });
 
   // If the channel closes (e.g. a past rate-limit), rejoin so presence/follow
