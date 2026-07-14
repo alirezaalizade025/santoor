@@ -18,10 +18,25 @@ export function myPresencePayload() {
   };
 }
 
+// Throttle all .track() calls: Supabase Realtime enforces a presence rate limit
+// and CLOSES the channel ("Client presence rate limit exceeded") on a burst.
+// Coalesce so we never send more often than PRESENCE_INTERVAL ms.
+let lastPresenceAt = 0;
+const PRESENCE_INTERVAL = 800;
+
 export function broadcastPresence(immediate) {
   if (!store.presenceChannel) return;
-  if (immediate) { clearTimeout(store.presenceUpdateTimer); store.presenceChannel.track(myPresencePayload()); }
-  else { clearTimeout(store.presenceUpdateTimer); store.presenceUpdateTimer = setTimeout(() => store.presenceChannel.track(myPresencePayload()), 1000); }
+  clearTimeout(store.presenceUpdateTimer);
+  const fire = () => {
+    const since = Date.now() - lastPresenceAt;
+    if (since < PRESENCE_INTERVAL) {
+      store.presenceUpdateTimer = setTimeout(fire, PRESENCE_INTERVAL - since);
+      return;
+    }
+    lastPresenceAt = Date.now();
+    store.presenceChannel.track(myPresencePayload());
+  };
+  store.presenceUpdateTimer = setTimeout(fire, immediate ? 0 : 1000);
 }
 
 export function initPresence() {
@@ -49,6 +64,10 @@ export function initPresence() {
     .subscribe(async (status) => {
       if (status === 'SUBSCRIBED') broadcastPresence(true);
     });
+
+  // If the channel closes (e.g. a past rate-limit), rejoin so presence/follow
+  // recover without a full page reload.
+  store.presenceChannel.on('close', () => { setTimeout(initPresence, 2000); });
 
   // Heartbeat: re-track our presence so late joiners and reconnects always
   // converge on current state (Supabase presence sync on join can be missed).
