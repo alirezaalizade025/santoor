@@ -184,7 +184,7 @@
     root.innerHTML = `
       <div class="cn-wrap">
         <div class="cn-header">
-          <h1 class="cn-title">Continuum<span class="dot">.</span></h1>
+          <h1 class="cn-title">santoor<span class="dot">.</span></h1>
           <div class="cn-sync-status"><span class="cn-pulse ${state.isPlaying && dbReady ? 'live' : 'off'}"></span>${syncLabel}</div>
         </div>
 
