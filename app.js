@@ -47,6 +47,7 @@
       track_title: track ? track.title : null,
       position_seconds: state.currentTime,
       is_playing: state.isPlaying,
+      following_id: followingId,
       updated_at: Date.now()
     };
   }
@@ -68,7 +69,7 @@
 
         if (followingId) {
           const peer = onlineUsers.find((u) => u.id === followingId);
-          if (!peer) { followingId = null; }
+          if (!peer) { stopFollowing(); }
           else mirrorPeer(peer);
         }
         render();
@@ -76,6 +77,10 @@
       .subscribe(async (status) => {
         if (status === 'SUBSCRIBED') broadcastPresence(true);
       });
+
+    // Heartbeat: re-track our presence so late joiners and reconnects always
+    // converge on current state (Supabase presence sync on join can be missed).
+    setInterval(() => { if (presenceChannel) broadcastPresence(false); }, 5000);
   }
 
   function mirrorPeer(peer) {
@@ -110,11 +115,13 @@
       const p = onlineUsers.find((u) => u.id === followingId);
       if (p) mirrorPeer(p);
     }, 4000);
+    broadcastPresence(true);
     render();
   }
   function stopFollowing() {
     followingId = null;
     clearInterval(followDriftTimer);
+    broadcastPresence(true);
     render();
   }
 
@@ -159,11 +166,13 @@
   let audio = new Audio();
   audio.preload = 'metadata';
   let duration = 0;
+  let pendingSeek = null;
   let saveTimer = null;
   let pendingRemote = null;
   let errorMsg = '';
   let isOnline = navigator.onLine;
   let loading = true;
+  let loop = false;
 
   function fmtTime(sec) {
     if (!isFinite(sec) || sec < 0) sec = 0;
@@ -194,8 +203,8 @@
     if (index < 0 || index >= state.queue.length) return;
     state.currentIndex = index;
     const track = state.queue[index];
+    pendingSeek = seekTo || 0;
     audio.src = track.url;
-    audio.currentTime = seekTo || 0;
     duration = 0;
     if (autoplay) {
       audio.play().then(() => { state.isPlaying = true; render(); })
@@ -240,6 +249,7 @@
     if (state.isPlaying) { audio.pause(); state.isPlaying = false; persistPosition(true); broadcastPresence(true); render(); }
     else { audio.play().then(() => { state.isPlaying = true; persistPosition(true); broadcastPresence(true); render(); }).catch(() => showError('Playback failed.')); }
   }
+  function toggleLoop() { if (followingId) return; loop = !loop; render(); }
   function next() { if (followingId) return; if (state.currentIndex < state.queue.length - 1) { loadTrack(state.currentIndex + 1, true); persistPosition(true); broadcastPresence(true); } }
   function prev() { if (followingId) return; if (state.currentIndex > 0) { loadTrack(state.currentIndex - 1, true); persistPosition(true); broadcastPresence(true); } }
   function seekTo(fraction) {
@@ -263,11 +273,24 @@
 
   audio.addEventListener('timeupdate', () => {
     state.currentTime = audio.currentTime;
-    if (Math.floor(audio.currentTime) % 5 === 0) { persistPosition(false); broadcastPresence(false); }
+    if (Math.floor(audio.currentTime) % 5 === 0) {
+      if (!followingId) persistPosition(false);
+      broadcastPresence(false);
+    }
     render();
   });
-  audio.addEventListener('loadedmetadata', () => { duration = audio.duration; render(); });
-  audio.addEventListener('ended', () => { if (state.currentIndex < state.queue.length - 1) next(); else { state.isPlaying = false; persistPosition(true); render(); } });
+  audio.addEventListener('loadedmetadata', () => {
+    duration = audio.duration;
+    if (pendingSeek != null) { try { audio.currentTime = pendingSeek; } catch (e) {} pendingSeek = null; }
+    if (!followingId) broadcastPresence(true);
+    render();
+  });
+  audio.addEventListener('ended', () => {
+    if (followingId) return;
+    if (state.currentIndex < state.queue.length - 1) { next(); }
+    else if (loop && state.queue.length > 0) { loadTrack(0, true); persistPosition(true); broadcastPresence(true); }
+    else { state.isPlaying = false; persistPosition(true); render(); }
+  });
   audio.addEventListener('error', () => { if (state.currentIndex !== -1) showError('This track failed to load — link may be broken or blocks playback.'); });
 
   window.addEventListener('online', () => { isOnline = true; render(); });
@@ -276,6 +299,8 @@
   // ── Render ───────────────────────────────────────────────────────────
   function render() {
     const track = state.currentIndex !== -1 ? state.queue[state.currentIndex] : null;
+    const nickEl = document.getElementById('cn-nickname-input');
+    const nickVal = (nickEl && document.activeElement === nickEl) ? nickEl.value : nickname;
     const progressPct = duration ? (state.currentTime / duration) * 100 : 0;
     const bars = Array.from({ length: 40 }).map((_, i) => {
       const isActive = (i / 40) * 100 <= progressPct;
@@ -285,6 +310,7 @@
 
     const syncLabel = dbReady ? 'Synced via database' : 'Database not configured';
     const followingPeer = followingId ? onlineUsers.find((u) => u.id === followingId) : null;
+    const followers = onlineUsers.filter((u) => u.following_id === DEVICE_ID);
 
     root.innerHTML = `
       <div class="cn-wrap">
@@ -299,7 +325,15 @@
         ${dbReady ? `
           <div class="cn-presence-row">
             <span class="cn-presence-count">🟢 ${onlineUsers.length + 1} listening now</span>
-            <input class="cn-nickname-input" id="cn-nickname-input" value="${escapeHtml(nickname)}" maxlength="24" title="Your display name" />
+             <input class="cn-nickname-input" id="cn-nickname-input" value="${escapeHtml(nickVal)}" maxlength="24" title="Your display name" />
+          </div>
+        ` : ''}
+
+        ${followers.length > 0 ? `
+          <div class="cn-banner cn-followed-banner">
+            <div class="cn-banner-text">${followers.length === 1
+              ? escapeHtml(followers[0].nickname) + ' is listening together with you'
+              : followers.length + ' people are listening together with you'}</div>
           </div>
         ` : ''}
 
@@ -362,6 +396,9 @@
             <button class="cn-ctrl-btn" id="cn-next" ${state.currentIndex === -1 || state.currentIndex >= state.queue.length - 1 || followingId ? 'disabled' : ''} title="Next">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M16 6h2v12h-2zM6 6l8.5 6L6 18z"/></svg>
             </button>
+            <button class="cn-ctrl-btn ${loop ? 'cn-loop-active' : ''}" id="cn-loop" ${followingId ? 'disabled' : ''} title="Loop queue">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M7 7h10v3l4-4-4-4v3H5v6h2V7zm10 10H7v-3l-4 4 4 4v-3h12v-6h-2v4z"/></svg>
+            </button>
           </div>
         </div>
 
@@ -409,6 +446,7 @@
     const playBtn = document.getElementById('cn-play'); if (playBtn) playBtn.onclick = togglePlay;
     const prevBtn = document.getElementById('cn-prev'); if (prevBtn) prevBtn.onclick = prev;
     const nextBtn = document.getElementById('cn-next'); if (nextBtn) nextBtn.onclick = next;
+    const loopBtn = document.getElementById('cn-loop'); if (loopBtn) loopBtn.onclick = toggleLoop;
 
     const progressTrack = document.getElementById('cn-progress-track');
     if (progressTrack) progressTrack.onclick = (e) => { const rect = progressTrack.getBoundingClientRect(); seekTo((e.clientX - rect.left) / rect.width); };
@@ -461,7 +499,7 @@
     loading = false;
     render();
 
-    subscribeToPlayerState((remote) => { pendingRemote = remote; render(); });
+    subscribeToPlayerState((remote) => { if (!followingId) { pendingRemote = remote; render(); } });
     initPresence();
 
     if ('serviceWorker' in navigator) {

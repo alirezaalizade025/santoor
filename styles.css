@@ -45,6 +45,8 @@ html, body {
 @keyframes cn-slide-in { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: translateY(0); } }
 .cn-banner-text { color: #FBEAD0; }
 .cn-banner-actions { display: flex; gap: 8px; flex-shrink: 0; }
+.cn-followed-banner { background: #1F3A3A; border-color: var(--teal); }
+.cn-followed-banner .cn-banner-text { color: #CDEDED; }
 .cn-btn-small { font-family: var(--font-mono); font-size: 11px; padding: 6px 10px; border-radius: 6px; border: 1px solid var(--gold); background: transparent; color: var(--gold); cursor: pointer; }
 .cn-btn-small:hover { background: var(--gold); color: #17161B; }
 
@@ -85,6 +87,7 @@ html, body {
 .cn-ctrl-btn:hover { opacity: 1; }
 .cn-ctrl-btn:disabled { opacity: 0.25; cursor: not-allowed; }
 .cn-play-btn { background: var(--gold); color: #17161B; border-radius: 50%; width: 46px; height: 46px; }
+.cn-loop-active { color: var(--gold); }
 .cn-play-btn:hover { opacity: 0.9; }
 
 .cn-section-label { font-family: var(--font-mono); font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-dim); margin-bottom: 10px; }
