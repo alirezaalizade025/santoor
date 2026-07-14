@@ -38,7 +38,7 @@ function unlockAudioOnGesture() {
 // network awaits) can unlock audio for later mirrored playback.
 ['pointerdown', 'touchstart', 'click', 'keydown'].forEach((e) => window.addEventListener(e, unlockAudioOnGesture));
 
-function persistPosition(immediate) {
+export function persistPosition(immediate) {
   if (!store.dbReady) return;
   const track = store.currentIndex !== -1 ? store.queue[store.currentIndex] : null;
   const payload = { current_track_id: track ? track.id : null, position_seconds: store.currentTime, is_playing: store.isPlaying };
