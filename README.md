@@ -1,4 +1,4 @@
-# Continuum — music player, GitHub Pages + Supabase
+# Santoor — music player, GitHub Pages + Supabase
 
 ## What's in this folder
 - `index.html`, `styles.css`, `app.js` — the app
@@ -56,6 +56,25 @@ Jekyll processing interferes with plain static sites.
   not stored content). Every device subscribes to this row in real time via
   Supabase Realtime, so when you pause on your phone, your laptop sees it
   within about a second and offers to pick up from that exact spot.
+
+## Listen together (new)
+- The header shows how many people currently have the app open (🟢 N
+  listening now) — this uses Supabase Realtime **Presence**, a WebSocket
+  feature, separate from the database sync above. Nobody needs to be
+  playing anything for the count to show them as present.
+- Give yourself a display name in the box next to the listener count —
+  it's saved locally so it persists across visits on that browser.
+- Under "Listening now," each other visitor has a **Listen together**
+  button. Turning it on makes your player mirror theirs: same track, same
+  position, same play/pause state. Your own controls lock while following
+  (there's a "Stop" button in the banner to take back control).
+- Position sync accounts for network delay and re-corrects every few
+  seconds if it drifts — this is "closely synced," not frame-perfect.
+  Browser autoplay restrictions mean the very first mirrored `play` may
+  occasionally need you to tap play once, depending on the browser.
+- No database table changes were needed for this — presence data is
+  ephemeral (only exists while a tab is open), so it lives entirely in
+  Realtime, not in Postgres.
 
 ## Known limitations
 - **No user accounts yet** — this setup is single-shared-queue, meant for

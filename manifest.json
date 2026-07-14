@@ -1,6 +1,6 @@
 {
-  "name": "santoor Music Player",
-  "short_name": "santoor",
+  "name": "Santoor Music Player",
+  "short_name": "Santoor",
   "description": "A music player that remembers exactly where you left off, on every device.",
   "start_url": "./index.html",
   "scope": "./",

@@ -99,6 +99,19 @@ html, body {
 .cn-queue-remove:hover { color: var(--danger); }
 
 .cn-empty-queue { font-family: var(--font-mono); font-size: 12px; color: var(--text-dim); padding: 20px 0; text-align: center; border: 1px dashed var(--line); border-radius: 10px; }
+
+.cn-presence-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 16px; }
+.cn-presence-count { font-family: var(--font-mono); font-size: 11px; color: var(--text-dim); }
+.cn-nickname-input { background: var(--bg-raised); border: 1px solid var(--line); border-radius: 6px; padding: 5px 9px; color: var(--text); font-family: var(--font-body); font-size: 12px; outline: none; width: 140px; text-align: right; }
+.cn-nickname-input:focus { border-color: var(--teal); }
+
+.cn-listeners { display: flex; flex-direction: column; gap: 6px; margin-bottom: 28px; }
+.cn-listener-item { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 8px; background: var(--bg-raised); border: 1px solid var(--line); }
+.cn-listener-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--teal); flex-shrink: 0; }
+.cn-listener-info { flex: 1; min-width: 0; }
+.cn-listener-name { font-size: 13px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cn-listener-status { font-family: var(--font-mono); font-size: 10.5px; color: var(--text-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cn-btn-active { background: var(--gold); color: #17161B; }
 .cn-error { color: var(--danger); font-family: var(--font-mono); font-size: 11px; margin-top: -16px; margin-bottom: 16px; }
 
 @media (max-width: 420px) {

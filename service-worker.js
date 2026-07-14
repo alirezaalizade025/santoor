@@ -1,9 +1,9 @@
-// Continuum service worker
+// Santoor service worker
 // Caches the app shell so the app opens offline. Supabase API calls and
 // audio streams are cross-origin and always pass straight through to the
 // network — we never try to cache or intercept them.
 
-const CACHE_NAME = 'continuum-shell-v2';
+const CACHE_NAME = 'santoor-shell-v2';
 const SHELL_FILES = [
   './',
   './index.html',

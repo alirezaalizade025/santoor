@@ -1,5 +1,5 @@
 (function () {
-  const root = document.getElementById('continuum-root');
+  const root = document.getElementById('santoor-root');
   const DEVICE_ID = 'dev-' + Math.random().toString(36).slice(2, 8);
 
   // ── Supabase client ─────────────────────────────────────────────────
@@ -15,6 +15,107 @@
       console.error('Supabase init failed', e);
       return false;
     }
+  }
+
+  // ── Identity (for presence / "listen together") ─────────────────────
+  function loadNickname() {
+    try {
+      const saved = localStorage.getItem('santoor:nickname');
+      if (saved) return saved;
+    } catch (e) {}
+    const name = 'Listener-' + Math.random().toString(36).slice(2, 6);
+    try { localStorage.setItem('santoor:nickname', name); } catch (e) {}
+    return name;
+  }
+  function saveNickname(name) {
+    try { localStorage.setItem('santoor:nickname', name); } catch (e) {}
+  }
+  let nickname = loadNickname();
+
+  // ── Presence (who's listening now + "listen together") ─────────────
+  let presenceChannel = null;
+  let onlineUsers = []; // [{id, nickname, track_id, position_seconds, is_playing, updated_at}]
+  let followingId = null;
+  let followDriftTimer = null;
+  let presenceUpdateTimer = null;
+
+  function myPresencePayload() {
+    const track = state.currentIndex !== -1 ? state.queue[state.currentIndex] : null;
+    return {
+      nickname,
+      track_id: track ? track.id : null,
+      track_title: track ? track.title : null,
+      position_seconds: state.currentTime,
+      is_playing: state.isPlaying,
+      updated_at: Date.now()
+    };
+  }
+
+  function broadcastPresence(immediate) {
+    if (!presenceChannel) return;
+    if (immediate) { clearTimeout(presenceUpdateTimer); presenceChannel.track(myPresencePayload()); }
+    else { clearTimeout(presenceUpdateTimer); presenceUpdateTimer = setTimeout(() => presenceChannel.track(myPresencePayload()), 1000); }
+  }
+
+  function initPresence() {
+    presenceChannel = db.channel('listeners-room', { config: { presence: { key: DEVICE_ID } } });
+    presenceChannel
+      .on('presence', { event: 'sync' }, () => {
+        const raw = presenceChannel.presenceState();
+        onlineUsers = Object.entries(raw)
+          .filter(([id]) => id !== DEVICE_ID)
+          .map(([id, arr]) => Object.assign({ id }, arr[0]));
+
+        if (followingId) {
+          const peer = onlineUsers.find((u) => u.id === followingId);
+          if (!peer) { followingId = null; }
+          else mirrorPeer(peer);
+        }
+        render();
+      })
+      .subscribe(async (status) => {
+        if (status === 'SUBSCRIBED') broadcastPresence(true);
+      });
+  }
+
+  function mirrorPeer(peer) {
+    if (!peer.track_id) return;
+    const idx = state.queue.findIndex((t) => t.id === peer.track_id);
+    if (idx === -1) return;
+    const elapsed = peer.is_playing ? (Date.now() - (peer.updated_at || Date.now())) / 1000 : 0;
+    const targetTime = (peer.position_seconds || 0) + elapsed;
+
+    if (state.currentIndex !== idx) {
+      loadTrack(idx, peer.is_playing, targetTime);
+      return;
+    }
+    if (peer.is_playing && !state.isPlaying) {
+      audio.currentTime = targetTime;
+      audio.play().then(() => { state.isPlaying = true; render(); }).catch(() => {});
+    } else if (!peer.is_playing && state.isPlaying) {
+      audio.pause();
+      state.isPlaying = false;
+      render();
+    } else if (Math.abs(audio.currentTime - targetTime) > 1.5) {
+      audio.currentTime = targetTime;
+    }
+  }
+
+  function startFollowing(peerId) {
+    followingId = peerId;
+    const peer = onlineUsers.find((u) => u.id === peerId);
+    if (peer) mirrorPeer(peer);
+    clearInterval(followDriftTimer);
+    followDriftTimer = setInterval(() => {
+      const p = onlineUsers.find((u) => u.id === followingId);
+      if (p) mirrorPeer(p);
+    }, 4000);
+    render();
+  }
+  function stopFollowing() {
+    followingId = null;
+    clearInterval(followDriftTimer);
+    render();
   }
 
   // ── Track CRUD (Create, Read, Delete — no Update, by design) ───────
@@ -134,17 +235,20 @@
   }
 
   function togglePlay() {
+    if (followingId) return;
     if (state.currentIndex === -1) return;
-    if (state.isPlaying) { audio.pause(); state.isPlaying = false; persistPosition(true); render(); }
-    else { audio.play().then(() => { state.isPlaying = true; persistPosition(true); render(); }).catch(() => showError('Playback failed.')); }
+    if (state.isPlaying) { audio.pause(); state.isPlaying = false; persistPosition(true); broadcastPresence(true); render(); }
+    else { audio.play().then(() => { state.isPlaying = true; persistPosition(true); broadcastPresence(true); render(); }).catch(() => showError('Playback failed.')); }
   }
-  function next() { if (state.currentIndex < state.queue.length - 1) { loadTrack(state.currentIndex + 1, true); persistPosition(true); } }
-  function prev() { if (state.currentIndex > 0) { loadTrack(state.currentIndex - 1, true); persistPosition(true); } }
+  function next() { if (followingId) return; if (state.currentIndex < state.queue.length - 1) { loadTrack(state.currentIndex + 1, true); persistPosition(true); broadcastPresence(true); } }
+  function prev() { if (followingId) return; if (state.currentIndex > 0) { loadTrack(state.currentIndex - 1, true); persistPosition(true); broadcastPresence(true); } }
   function seekTo(fraction) {
+    if (followingId) return;
     if (!duration) return;
     audio.currentTime = fraction * duration;
     state.currentTime = audio.currentTime;
     persistPosition(true);
+    broadcastPresence(true);
     render();
   }
 
@@ -159,7 +263,7 @@
 
   audio.addEventListener('timeupdate', () => {
     state.currentTime = audio.currentTime;
-    if (Math.floor(audio.currentTime) % 5 === 0) persistPosition(false);
+    if (Math.floor(audio.currentTime) % 5 === 0) { persistPosition(false); broadcastPresence(false); }
     render();
   });
   audio.addEventListener('loadedmetadata', () => { duration = audio.duration; render(); });
@@ -180,16 +284,33 @@
     }).join('');
 
     const syncLabel = dbReady ? 'Synced via database' : 'Database not configured';
+    const followingPeer = followingId ? onlineUsers.find((u) => u.id === followingId) : null;
 
     root.innerHTML = `
       <div class="cn-wrap">
         <div class="cn-header">
-          <h1 class="cn-title">santoor<span class="dot">.</span></h1>
+          <h1 class="cn-title">Santoor<span class="dot">.</span></h1>
           <div class="cn-sync-status"><span class="cn-pulse ${state.isPlaying && dbReady ? 'live' : 'off'}"></span>${syncLabel}</div>
         </div>
 
         ${!dbReady ? `<div class="cn-offline-banner">Add your Supabase URL and anon key to supabase-config.js, then reload — see README.md for the 5-minute setup.</div>` : ''}
         ${!isOnline ? `<div class="cn-offline-banner">You're offline — reconnect to add tracks or sync playback.</div>` : ''}
+
+        ${dbReady ? `
+          <div class="cn-presence-row">
+            <span class="cn-presence-count">🟢 ${onlineUsers.length + 1} listening now</span>
+            <input class="cn-nickname-input" id="cn-nickname-input" value="${escapeHtml(nickname)}" maxlength="24" title="Your display name" />
+          </div>
+        ` : ''}
+
+        ${followingPeer ? `
+          <div class="cn-banner">
+            <div class="cn-banner-text">Listening together with ${escapeHtml(followingPeer.nickname)} — controls are locked to stay in sync</div>
+            <div class="cn-banner-actions">
+              <button class="cn-btn-small" id="cn-stop-following">Stop</button>
+            </div>
+          </div>
+        ` : ''}
 
         ${pendingRemote ? `
           <div class="cn-banner">
@@ -230,19 +351,37 @@
           </div>
 
           <div class="cn-controls">
-            <button class="cn-ctrl-btn" id="cn-prev" ${state.currentIndex <= 0 ? 'disabled' : ''} title="Previous">
+            <button class="cn-ctrl-btn" id="cn-prev" ${state.currentIndex <= 0 || followingId ? 'disabled' : ''} title="Previous">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M6 6h2v12H6zm3.5 6l8.5 6V6z"/></svg>
             </button>
-            <button class="cn-ctrl-btn cn-play-btn" id="cn-play" ${state.currentIndex === -1 ? 'disabled' : ''} title="Play/Pause">
+            <button class="cn-ctrl-btn cn-play-btn" id="cn-play" ${state.currentIndex === -1 || followingId ? 'disabled' : ''} title="Play/Pause">
               ${state.isPlaying
                 ? `<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="5" width="4" height="14"/><rect x="14" y="5" width="4" height="14"/></svg>`
                 : `<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>`}
             </button>
-            <button class="cn-ctrl-btn" id="cn-next" ${state.currentIndex === -1 || state.currentIndex >= state.queue.length - 1 ? 'disabled' : ''} title="Next">
+            <button class="cn-ctrl-btn" id="cn-next" ${state.currentIndex === -1 || state.currentIndex >= state.queue.length - 1 || followingId ? 'disabled' : ''} title="Next">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M16 6h2v12h-2zM6 6l8.5 6L6 18z"/></svg>
             </button>
           </div>
         </div>
+
+        ${dbReady && onlineUsers.length > 0 ? `
+          <div class="cn-section-label">Listening now</div>
+          <div class="cn-listeners">
+            ${onlineUsers.map((u) => `
+              <div class="cn-listener-item">
+                <span class="cn-listener-dot"></span>
+                <div class="cn-listener-info">
+                  <div class="cn-listener-name">${escapeHtml(u.nickname || 'Listener')}</div>
+                  <div class="cn-listener-status">${u.track_title ? (u.is_playing ? 'Playing — ' : 'Paused — ') + escapeHtml(u.track_title) : 'Idle'}</div>
+                </div>
+                <button class="cn-btn-small ${followingId === u.id ? 'cn-btn-active' : ''}" data-follow="${u.id}">
+                  ${followingId === u.id ? 'Following' : 'Listen together'}
+                </button>
+              </div>
+            `).join('')}
+          </div>
+        ` : ''}
 
         <div class="cn-section-label">Queue — ${state.queue.length} track${state.queue.length === 1 ? '' : 's'}</div>
         <div class="cn-queue">
@@ -277,8 +416,10 @@
     document.querySelectorAll('.cn-queue-item').forEach((el) => {
       el.addEventListener('click', (e) => {
         if (e.target.closest('[data-remove]')) return;
+        if (followingId) return;
         loadTrack(parseInt(el.getAttribute('data-idx'), 10), true);
         persistPosition(true);
+        broadcastPresence(true);
       });
     });
     document.querySelectorAll('[data-remove]').forEach((el) => {
@@ -287,6 +428,22 @@
 
     const resumeBtn = document.getElementById('cn-resume-remote'); if (resumeBtn) resumeBtn.onclick = () => applyRemote(pendingRemote, true);
     const dismissBtn = document.getElementById('cn-dismiss-remote'); if (dismissBtn) dismissBtn.onclick = () => { pendingRemote = null; render(); };
+
+    const nicknameInput = document.getElementById('cn-nickname-input');
+    if (nicknameInput) {
+      nicknameInput.onchange = () => {
+        nickname = nicknameInput.value.trim() || nickname;
+        saveNickname(nickname);
+        broadcastPresence(true);
+      };
+    }
+    document.querySelectorAll('[data-follow]').forEach((el) => {
+      el.addEventListener('click', () => {
+        const id = el.getAttribute('data-follow');
+        followingId === id ? stopFollowing() : startFollowing(id);
+      });
+    });
+    const stopBtn = document.getElementById('cn-stop-following'); if (stopBtn) stopBtn.onclick = stopFollowing;
   }
 
   async function init() {
@@ -305,6 +462,7 @@
     render();
 
     subscribeToPlayerState((remote) => { pendingRemote = remote; render(); });
+    initPresence();
 
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.register('./service-worker.js').catch((e) => console.error('SW registration failed', e));
