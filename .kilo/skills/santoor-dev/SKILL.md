@@ -61,6 +61,17 @@ only happen at runtime (inside handlers), never at module top level.
   activation so the follower can start playing when the leader starts. Don't remove it
   or move the listener registration out of module load (must be active before init's
   network awaits).
+- **Realtime has two separate channels — don't conflate them:**
+  - `realtime:listeners-room` (**presence**) powers "Listen together". It is
+    **room-wide**: the leader broadcasts `track_id`/`position_seconds`/`is_playing`
+    to EVERY device, not just followers. `following_id` in the payload only drives
+    the leader's "X is listening together with you" banner — it is NOT required for
+    sync. Debug presence by watching these WS frames in DevTools.
+  - `realtime:player_state_changes` (**postgres_changes**) powers the "Resume here"
+    cross-device banner. It needs Realtime enabled for the `player_state` table in
+    the Supabase dashboard (Database → Replication). If the console shows
+    "Unable to subscribe to changes", that's the cause — it is unrelated to presence
+    and only breaks the resume banner, not Listen together.
 - **Stale shell gotcha**: after ANY change, the user must **hard-reload** (or close the
   tab) — the service worker serves the cached `santoor-shell-vN` shell, so a normal
   reload can hide your fix. Always bump `CACHE_NAME` AND tell the user to hard-reload.

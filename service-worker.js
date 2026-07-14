@@ -3,7 +3,7 @@
 // audio streams are cross-origin and always pass straight through to the
 // network — we never try to cache or intercept them.
 
-const CACHE_NAME = 'santoor-shell-v9';
+const CACHE_NAME = 'santoor-shell-v11';
 const SHELL_FILES = [
   './',
   './index.html',
@@ -45,16 +45,16 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
+  // Network-first: always serve the latest same-origin file when online, so a
+  // code change is never hidden behind a stale cached module. Falls back to the
+  // current cache only when offline. (Supabase/audio are cross-origin and skip this.)
   event.respondWith(
-    caches.match(event.request).then((cached) => {
-      if (cached) return cached;
-      return fetch(event.request)
-        .then((response) => {
-          const clone = response.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
-          return response;
-        })
-        .catch(() => cached);
-    })
+    fetch(event.request)
+      .then((response) => {
+        const clone = response.clone();
+        caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
+        return response;
+      })
+      .catch(() => caches.match(event.request, { cacheName: CACHE_NAME }))
   );
 });

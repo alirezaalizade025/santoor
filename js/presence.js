@@ -31,7 +31,13 @@ export function initPresence() {
       const raw = store.presenceChannel.presenceState();
       store.onlineUsers = Object.entries(raw)
         .filter(([id]) => id !== DEVICE_ID)
-        .map(([id, arr]) => Object.assign({ id }, arr[0]));
+        .map(([id, arr]) => {
+          // A key can have several metas (frequent re-tracks create transient
+          // joins/leaves). Take the most recent by our own updated_at so we
+          // never read a stale following_id / is_playing from an old meta.
+          const latest = arr.slice().sort((a, b) => (b.updated_at || 0) - (a.updated_at || 0))[0];
+          return Object.assign({ id }, latest);
+        });
 
       if (store.followingId) {
         const peer = store.onlineUsers.find((u) => u.id === store.followingId);
