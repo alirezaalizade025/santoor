@@ -3,12 +3,19 @@
 // audio streams are cross-origin and always pass straight through to the
 // network — we never try to cache or intercept them.
 
-const CACHE_NAME = 'santoor-shell-v6';
+const CACHE_NAME = 'santoor-shell-v7';
 const SHELL_FILES = [
   './',
   './index.html',
   './styles.css',
   './app.js',
+  './js/store.js',
+  './js/util.js',
+  './js/identity.js',
+  './js/supabase.js',
+  './js/presence.js',
+  './js/player.js',
+  './js/render.js',
   './supabase-config.js',
   './manifest.json',
   './icons/icon-192.png',
