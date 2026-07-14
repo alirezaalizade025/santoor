@@ -55,6 +55,15 @@ only happen at runtime (inside handlers), never at module top level.
   `store.followingId` is set, the follower must NOT call `persistPosition` (don't write
   the shared `player_state` row — it hijacks the leader) and must NOT show the
   `pendingRemote` banner. The leader only broadcasts; it never reads followers' playback.
+- **Mobile autoplay unlock** (`js/player.js` `unlockAudioOnGesture`): a programmatic
+  `audio.play()` fired from a Realtime `sync` event is blocked by iOS/Android. The
+  first user gesture anywhere plays a silent clip to grant the element sticky
+  activation so the follower can start playing when the leader starts. Don't remove it
+  or move the listener registration out of module load (must be active before init's
+  network awaits).
+- **Stale shell gotcha**: after ANY change, the user must **hard-reload** (or close the
+  tab) — the service worker serves the cached `santoor-shell-vN` shell, so a normal
+  reload can hide your fix. Always bump `CACHE_NAME` AND tell the user to hard-reload.
 
 ## Editing tips
 - Read only the module/function you touch — files are small now, no need to load the

@@ -6,6 +6,38 @@ import { createTrack, deleteTrack, savePlayerState } from './supabase.js';
 import { broadcastPresence } from './presence.js';
 import { render } from './render.js';
 
+// Tiny silent clip used only to grant the audio element sticky activation on
+// mobile (iOS/Android block programmatic play() outside a user gesture).
+const SILENT_AUDIO = 'data:audio/mp3;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU4LjI5LjEwMAAAAAAAAAAAAAAA//tQxAADB8AhSmxhIIEVCSiJrDCQBTQQ91lwogr8efOOR0RUEkR/hK1B0he7sHrIWpBG0/0M3IgJ7l/9iI/fo/1kh/uIR/+Mf/fo/1kh/uIR/+Mf/fo/1kh/uIR/+Mf/fo/1kh/uIR/+Mf/fo/1kh/uIR/+Mf/fo/1kh/uIR/+Mf/fo/1kh/uIR/+Mf/fo/1kh/uIR/+Mf/fo/1kh/uIR/+Mf/fo/1kh/uIR/+Mf/fo/1kh/uIR/+Mf/fo/1kh/uIR/+Mf/fo/1kh/uIR/+Mf/fo/1kh/uIR/+Mf/fo/1kh/uIR/+Mf/fo/1kh/uIR/+Mf/fo/1kh/uIR/+Mf/fo/1kh/uIR';
+
+// Run once on the first user gesture anywhere: play the silent clip (inside the
+// gesture) so later mirrored play() calls are allowed on mobile. Race-safe: only
+// restores the previous source if mirrorPeer hasn't already taken over.
+let audioUnlocked = false;
+function unlockAudioOnGesture() {
+  if (audioUnlocked) return;
+  audioUnlocked = true;
+  ['pointerdown', 'touchstart', 'click', 'keydown'].forEach((e) => window.removeEventListener(e, unlockAudioOnGesture));
+  const prev = audio.src;
+  const wasPlaying = !audio.paused;
+  audio.muted = true;
+  audio.src = SILENT_AUDIO;
+  audio.play()
+    .then(() => audio.pause())
+    .catch(() => {})
+    .finally(() => {
+      audio.muted = false;
+      if (audio.src === SILENT_AUDIO) {
+        audio.src = prev;
+        if (prev) { audio.load(); if (wasPlaying) audio.play().catch(() => {}); }
+      }
+    });
+}
+
+// Register immediately at module load so the first gesture (even during init's
+// network awaits) can unlock audio for later mirrored playback.
+['pointerdown', 'touchstart', 'click', 'keydown'].forEach((e) => window.addEventListener(e, unlockAudioOnGesture));
+
 function persistPosition(immediate) {
   if (!store.dbReady) return;
   const track = store.currentIndex !== -1 ? store.queue[store.currentIndex] : null;
