@@ -207,10 +207,11 @@
     audio.src = track.url;
     duration = 0;
     if (autoplay) {
-      audio.play().then(() => { state.isPlaying = true; render(); })
-        .catch(() => { state.isPlaying = false; showError('Could not play this track — the source may block playback.'); });
+      audio.play().then(() => { state.isPlaying = true; broadcastPresence(true); render(); })
+        .catch(() => { state.isPlaying = false; showError('Could not play this track — the source may block playback.'); broadcastPresence(true); });
     } else {
       state.isPlaying = false;
+      broadcastPresence(true);
     }
     render();
   }
