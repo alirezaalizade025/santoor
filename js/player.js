@@ -1,6 +1,6 @@
 // Core playback logic: loading tracks, transport controls, queue add/remove,
 // position persistence, and the audio-element event wiring.
-import { store, audio } from './store.js';
+import { store, audio, DEVICE_ID } from './store.js';
 import { showError, urlHost, guessTitle } from './util.js';
 import { createTrack, deleteTrack, savePlayerState } from './supabase.js';
 import { broadcastPresence } from './presence.js';
@@ -38,12 +38,38 @@ function unlockAudioOnGesture() {
 // network awaits) can unlock audio for later mirrored playback.
 ['pointerdown', 'touchstart', 'click', 'keydown'].forEach((e) => window.addEventListener(e, unlockAudioOnGesture));
 
+// Keep a follower synced to the master's current position ("the minute"): the
+// controller broadcasts its playback every 2s while playing. Broadcast (not
+// presence) so it avoids the presence rate limit.
+setInterval(() => {
+  if (store.isPlaying && !store.followingId && store.presenceChannel) broadcastPlay();
+}, 2000);
+
 export function persistPosition(immediate) {
   if (!store.dbReady) return;
   const track = store.currentIndex !== -1 ? store.queue[store.currentIndex] : null;
   const payload = { current_track_id: track ? track.id : null, position_seconds: store.currentTime, is_playing: store.isPlaying };
   if (immediate) { clearTimeout(store.saveTimer); savePlayerState(payload); }
   else { clearTimeout(store.saveTimer); store.saveTimer = setTimeout(() => savePlayerState(payload), 800); }
+}
+
+// Broadcast our current playback over Realtime so a follower can play from the
+// exact minute the master is at. Uses broadcast (not presence) so it is not
+// subject to the presence rate limit. Only the controller (not a follower)
+// broadcasts, to avoid echo loops.
+function broadcastPlay() {
+  if (store.followingId || !store.presenceChannel) return;
+  const track = store.currentIndex !== -1 ? store.queue[store.currentIndex] : null;
+  store.presenceChannel.send({
+    type: 'broadcast',
+    event: 'play',
+    payload: {
+      peer_id: DEVICE_ID,
+      track_id: track ? track.id : null,
+      position_seconds: store.currentTime,
+      is_playing: store.isPlaying
+    }
+  });
 }
 
 export function loadTrack(index, autoplay, seekTo) {
@@ -54,11 +80,12 @@ export function loadTrack(index, autoplay, seekTo) {
   audio.src = track.url;
   store.duration = 0;
   if (autoplay) {
-    audio.play().then(() => { store.isPlaying = true; broadcastPresence(true); render(); })
+    audio.play().then(() => { store.isPlaying = true; broadcastPresence(true); broadcastPlay(); render(); })
       .catch(() => { store.isPlaying = false; showError('Could not play this track — the source may block playback.'); broadcastPresence(true); });
   } else {
     store.isPlaying = false;
     broadcastPresence(true);
+    broadcastPlay();
   }
   render();
 }
@@ -94,8 +121,8 @@ export async function removeTrack(id) {
 export function togglePlay() {
   if (store.followingId) return;
   if (store.currentIndex === -1) return;
-  if (store.isPlaying) { audio.pause(); store.isPlaying = false; persistPosition(true); broadcastPresence(true); render(); }
-  else { audio.play().then(() => { store.isPlaying = true; persistPosition(true); broadcastPresence(true); render(); }).catch(() => showError('Playback failed.')); }
+  if (store.isPlaying) { audio.pause(); store.isPlaying = false; persistPosition(true); broadcastPresence(true); broadcastPlay(); render(); }
+  else { audio.play().then(() => { store.isPlaying = true; persistPosition(true); broadcastPresence(true); broadcastPlay(); render(); }).catch(() => showError('Playback failed.')); }
 }
 
 export function toggleLoop() { if (store.followingId) return; store.loop = !store.loop; render(); }
@@ -117,6 +144,7 @@ export function seekTo(fraction) {
   store.currentTime = audio.currentTime;
   persistPosition(true);
   broadcastPresence(true);
+  broadcastPlay();
   render();
 }
 

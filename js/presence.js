@@ -107,6 +107,19 @@ export function initPresence() {
       }
       render();
     })
+    // Playback sync: the followed peer broadcasts its {track_id, second,
+    // is_playing}. The subscriber plays that song from that minute. Scoped to
+    // the peer we're following so other devices' broadcasts are ignored.
+    .on('broadcast', { event: 'play' }, ({ payload }) => {
+      if (!payload || payload.peer_id !== store.followingId) return;
+      if (!payload.track_id) return;
+      mirrorPeer({
+        track_id: payload.track_id,
+        position_seconds: payload.position_seconds,
+        is_playing: payload.is_playing,
+        updated_at: Date.now()
+      });
+    })
     .subscribe(async (status) => {
       if (status === 'SUBSCRIBED') {
         broadcastPresence(true);
