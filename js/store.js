@@ -19,9 +19,14 @@ export const store = {
   saveTimer: null,
   presenceChannel: null,
   onlineUsers: [],
+  peerLastSeen: {},        // id -> last ping/pong timestamp (ms), for real-time disconnect detection
+  connectionHealthy: true, // our own Realtime socket state
   followingId: null,
   followDriftTimer: null,
   presenceUpdateTimer: null,
+  pingTimer: null,         // sends our heartbeat ping
+  peerReapTimer: null,     // removes peers that stopped responding
+  connCheckTimer: null,    // watches our own connection
   pendingRemote: null,
   errorMsg: '',
   isOnline: navigator.onLine,

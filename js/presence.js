@@ -39,6 +39,31 @@ export function broadcastPresence(immediate) {
   store.presenceUpdateTimer = setTimeout(fire, immediate ? 0 : 1000);
 }
 
+// --- Ping/pong heartbeat: detect disconnects in real time ---------------------
+// Supabase presence "leave" can lag many seconds when a tab freezes or a network
+// drops without a clean socket close. We layer an app-level ping/pong on top:
+// every peer broadcasts a `ping`; receivers reply with a `pong`. We stamp each
+// peer's last-heard time and reap anyone who goes silent, so the "listening now"
+// list and follow feature react to drop-offs within a few seconds.
+const PING_INTERVAL = 4000;   // how often we broadcast our ping
+const PEER_TIMEOUT = 12000;   // peer is considered gone after this much silence
+
+// Record that we just heard from a peer (any ping/pong/presence message).
+function markPeerSeen(id) {
+  if (!id || id === DEVICE_ID) return;
+  store.peerLastSeen[id] = Date.now();
+}
+
+// Reflect the current Realtime socket state in the UI (our own connection).
+function refreshConnectionHealth() {
+  const rt = store.db && store.db.realtime;
+  const connected = rt && typeof rt.isConnected === 'function' ? rt.isConnected() : navigator.onLine;
+  if (connected !== store.connectionHealthy) {
+    store.connectionHealthy = connected;
+    render();
+  }
+}
+
 // Merge a peer (from a broadcast payload) into onlineUsers.
 function upsertPeer(peer) {
   if (!peer || !peer.id) return;
@@ -59,15 +84,21 @@ export function initPresence() {
   store.presenceChannel
     .on('presence', { event: 'sync' }, () => {
       const raw = store.presenceChannel.presenceState();
-      store.onlineUsers = Object.entries(raw)
+      const now = Date.now();
+      const candidates = Object.entries(raw)
         .filter(([id]) => id !== DEVICE_ID)
         .map(([id, arr]) => {
           // A key can have several metas (frequent re-tracks create transient
           // joins/leaves). Take the most recent by our own updated_at so we
           // never read a stale following_id / is_playing from an old meta.
           const latest = arr.slice().sort((a, b) => (b.updated_at || 0) - (a.updated_at || 0))[0];
+          // New peer: give it a grace stamp so it isn't reaped before its first ping.
+          if (store.peerLastSeen[id] === undefined) store.peerLastSeen[id] = now;
           return Object.assign({ id }, latest);
         });
+      // Keep only peers whose ping/pong heartbeat is still fresh, so a peer that
+      // dropped without a clean leave doesn't linger in the list.
+      store.onlineUsers = candidates.filter((u) => (now - store.peerLastSeen[u.id]) < PEER_TIMEOUT);
 
       if (store.followingId) {
         const peer = store.onlineUsers.find((u) => u.id === store.followingId);
@@ -81,6 +112,7 @@ export function initPresence() {
     // "where active now". Replies never re-trigger a join, so no loop.
     .on('broadcast', { event: 'join' }, ({ payload }) => {
       if (!payload || !payload.peer) return;
+      markPeerSeen(payload.peer.id);
       upsertPeer(payload.peer);
       store.presenceChannel.send({
         type: 'broadcast',
@@ -98,6 +130,7 @@ export function initPresence() {
     })
     .on('broadcast', { event: 'reply' }, ({ payload }) => {
       if (!payload || !payload.peer) return;
+      markPeerSeen(payload.peer.id);
       upsertPeer(payload.peer);
       // Catch the newcomer up to the active playback so they know where it is.
       const s = payload.state;
@@ -112,6 +145,7 @@ export function initPresence() {
     // the peer we're following so other devices' broadcasts are ignored.
     .on('broadcast', { event: 'play' }, ({ payload }) => {
       if (!payload || payload.peer_id !== store.followingId) return;
+      markPeerSeen(payload.peer_id);
       if (!payload.track_id) return;
       mirrorPeer({
         track_id: payload.track_id,
@@ -120,8 +154,20 @@ export function initPresence() {
         updated_at: Date.now()
       });
     })
+    // Ping/pong heartbeat. A peer's ping proves it's still connected; we reply
+    // with a pong so it learns the same about us. Both stamp last-heard time.
+    .on('broadcast', { event: 'ping' }, ({ payload }) => {
+      if (!payload || !payload.id) return;
+      markPeerSeen(payload.id);
+      store.presenceChannel.send({ type: 'broadcast', event: 'pong', payload: { id: DEVICE_ID } });
+    })
+    .on('broadcast', { event: 'pong' }, ({ payload }) => {
+      if (!payload || !payload.id) return;
+      markPeerSeen(payload.id);
+    })
     .subscribe(async (status) => {
       if (status === 'SUBSCRIBED') {
+        store.connectionHealthy = true;
         broadcastPresence(true);
         // Announce arrival so existing members send us their current state.
         // Sent only here (not on receiving replies) so the process runs once.
@@ -130,16 +176,58 @@ export function initPresence() {
           event: 'join',
           payload: { peer: Object.assign({ id: DEVICE_ID }, myPresencePayload()) }
         });
+        startHeartbeat();
+        render();
       }
     });
 
   // If the channel closes (e.g. a past rate-limit), rejoin so presence/follow
   // recover without a full page reload.
-  store.presenceChannel.on('close', () => { setTimeout(initPresence, 2000); });
+  store.presenceChannel.on('close', () => {
+    stopHeartbeat();
+    store.connectionHealthy = false;
+    render();
+    setTimeout(initPresence, 2000);
+  });
+}
 
-  // Heartbeat: re-track our presence so late joiners and reconnects always
-  // converge on current state (Supabase presence sync on join can be missed).
-  setInterval(() => { if (store.presenceChannel) broadcastPresence(false); }, 5000);
+// Start the ping/pong + reaper + connection-watch timers. Safe to call again:
+// each timer is cleared first so reconnects don't stack duplicates.
+function startHeartbeat() {
+  stopHeartbeat();
+
+  // Broadcast our ping so peers know we're alive; also re-track presence so late
+  // joiners and reconnects converge on our current state.
+  store.pingTimer = setInterval(() => {
+    if (!store.presenceChannel) return;
+    store.presenceChannel.send({ type: 'broadcast', event: 'ping', payload: { id: DEVICE_ID } });
+    broadcastPresence(false);
+  }, PING_INTERVAL);
+
+  // Reap peers we've stopped hearing from -> real-time "who left".
+  store.peerReapTimer = setInterval(() => {
+    const now = Date.now();
+    const before = store.onlineUsers.length;
+    store.onlineUsers = store.onlineUsers.filter((u) => {
+      const alive = (now - (store.peerLastSeen[u.id] || 0)) < PEER_TIMEOUT;
+      if (!alive) {
+        delete store.peerLastSeen[u.id];
+        if (store.followingId === u.id) stopFollowing();
+      }
+      return alive;
+    });
+    if (store.onlineUsers.length !== before) render();
+  }, 3000);
+
+  // Watch our OWN connection so a dropped socket surfaces immediately.
+  store.connCheckTimer = setInterval(refreshConnectionHealth, 3000);
+}
+
+function stopHeartbeat() {
+  clearInterval(store.pingTimer);
+  clearInterval(store.peerReapTimer);
+  clearInterval(store.connCheckTimer);
+  store.pingTimer = store.peerReapTimer = store.connCheckTimer = null;
 }
 
 // Make this follower mirror a peer's playback. `peer` comes from presence state.

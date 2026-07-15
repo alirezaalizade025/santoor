@@ -31,6 +31,7 @@ export function render() {
 
       ${!store.dbReady ? `<div class="cn-offline-banner">Add your Supabase URL and anon key to supabase-config.js, then reload — see README.md for the 5-minute setup.</div>` : ''}
       ${!store.isOnline ? `<div class="cn-offline-banner">You're offline — reconnect to add tracks or sync playback.</div>` : ''}
+      ${store.dbReady && store.isOnline && !store.connectionHealthy ? `<div class="cn-offline-banner">Live connection lost — reconnecting…</div>` : ''}
 
       ${store.dbReady ? `
         <div class="cn-presence-row">
