@@ -5,6 +5,7 @@ import { showError, urlHost, guessTitle } from './util.js';
 import { createTrack, deleteTrack, savePlayerState } from './supabase.js';
 import { broadcastPresence } from './presence.js';
 import { render } from './render.js';
+import { initMediaSession, updateMetadata, updatePlaybackState, updatePositionState } from './mediaSession.js';
 
 // Tiny silent clip used only to grant the audio element sticky activation on
 // mobile (iOS/Android block programmatic play() outside a user gesture).
@@ -79,6 +80,7 @@ export function loadTrack(index, autoplay, seekTo) {
   store.pendingSeek = seekTo || 0;
   audio.src = track.url;
   store.duration = 0;
+  updateMetadata(track);
   if (autoplay) {
     audio.play().then(() => { store.isPlaying = true; broadcastPresence(true); broadcastPlay(); render(); })
       .catch(() => { store.isPlaying = false; showError('Could not play this track — the source may block playback.'); broadcastPresence(true); });
@@ -148,6 +150,17 @@ export function seekTo(fraction) {
   render();
 }
 
+export function seekBy(delta) {
+  if (store.followingId) return;
+  if (!store.duration) return;
+  audio.currentTime = Math.min(Math.max(audio.currentTime + delta, 0), store.duration);
+  store.currentTime = audio.currentTime;
+  persistPosition(true);
+  broadcastPresence(true);
+  broadcastPlay();
+  render();
+}
+
 export function applyRemote(remote, resume) {
   if (resume) {
     const idx = store.queue.findIndex((t) => t.id === remote.current_track_id);
@@ -160,8 +173,20 @@ export function applyRemote(remote, resume) {
 // Wire the <audio> element once. The element lives outside the DOM, so these
 // listeners survive the full re-renders that happen on every timeupdate.
 export function attachAudioListeners() {
+  initMediaSession({
+    onPlay: () => { if (!store.isPlaying) togglePlay(); },
+    onPause: () => { if (store.isPlaying) togglePlay(); },
+    onNext: () => next(),
+    onPrev: () => prev(),
+    onSeek: (delta) => seekBy(delta)
+  });
+
+  audio.addEventListener('play', () => { updatePlaybackState(true); });
+  audio.addEventListener('pause', () => { updatePlaybackState(false); });
+
   audio.addEventListener('timeupdate', () => {
     store.currentTime = audio.currentTime;
+    updatePositionState(audio.currentTime, store.duration);
     if (Math.floor(audio.currentTime) % 5 === 0) {
       if (!store.followingId) persistPosition(false);
       broadcastPresence(false);
