@@ -6,6 +6,7 @@ import { createTrack, deleteTrack, savePlayerState, updateTrackDuration } from '
 import { broadcastPresence } from './presence.js';
 import { render } from './render.js';
 import { initMediaSession, updateMetadata, updatePlaybackState, updatePositionState } from './mediaSession.js';
+import { startWaveform } from './waveform.js';
 
 // Tiny silent clip used only to grant the audio element sticky activation on
 // mobile (iOS/Android block programmatic play() outside a user gesture).
@@ -316,7 +317,7 @@ export function attachAudioListeners() {
     onSeek: (delta) => seekBy(delta)
   });
 
-  audio.addEventListener('play', () => { updatePlaybackState(true); });
+  audio.addEventListener('play', () => { updatePlaybackState(true); startWaveform(); });
   audio.addEventListener('pause', () => { updatePlaybackState(false); });
 
   audio.addEventListener('timeupdate', () => {

@@ -81,6 +81,7 @@ html, body {
 .cn-bar.active { background: var(--gold); }
 .cn-bar.playing { animation: cn-bounce 0.8s ease-in-out infinite; }
 @keyframes cn-bounce { 0%,100% { transform: scaleY(0.6); } 50% { transform: scaleY(1); } }
+.cn-waveform-live .cn-bar { background: var(--gold); transition: height 0.06s linear; }
 
 .cn-progress-row { display: flex; align-items: center; gap: 10px; margin-bottom: 18px; }
 .cn-time { font-family: var(--font-mono); font-size: 11px; color: var(--text-dim); min-width: 36px; }

@@ -4,6 +4,7 @@ import { fmtTime, escapeHtml } from './util.js';
 import { togglePlay, toggleLoop, cycleRepeat, toggleShuffle, next, prev, seekTo, addTrack, removeTrack, applyRemote, loadTrack, persistPosition, joinPlayback, setVolume, playFromHistory, clearHistory } from './player.js';
 import { startFollowing, stopFollowing, broadcastPresence } from './presence.js';
 import { saveNickname } from './identity.js';
+import { isWaveformActive } from './waveform.js';
 
 const root = document.getElementById('santoor-root');
 
@@ -14,7 +15,13 @@ export function render() {
   const nickEl = document.getElementById('cn-nickname-input');
   const nickVal = (nickEl && document.activeElement === nickEl) ? nickEl.value : store.nickname;
   const progressPct = store.duration ? (store.currentTime / store.duration) * 100 : 0;
+  // When the real-signal AnalyserNode is driving the waveform, render flat bars
+  // that waveform.js animates directly (its RAF loop overwrites the heights). If
+  // the source is CORS-tainted (silent analyser) or unsupported, fall back to the
+  // decorative sine-wave bars keyed to progress.
+  const liveWave = isWaveformActive();
   const bars = Array.from({ length: 40 }).map((_, i) => {
+    if (liveWave) return `<div class="cn-bar" style="height:6%"></div>`;
     const isActive = (i / 40) * 100 <= progressPct;
     const h = 20 + Math.round(Math.abs(Math.sin(i * 12.9)) * 80);
     return `<div class="cn-bar ${isActive ? 'active' : ''} ${store.isPlaying && isActive ? 'playing' : ''}" style="height:${h}%; animation-delay:${(i % 6) * 0.08}s"></div>`;
@@ -101,7 +108,7 @@ export function render() {
           </div>
         </div>
 
-        <div class="cn-waveform">${bars}</div>
+        <div class="cn-waveform ${liveWave ? 'cn-waveform-live' : ''}">${bars}</div>
 
         <div class="cn-progress-row">
           <span class="cn-time">${fmtTime(store.currentTime)}</span>
