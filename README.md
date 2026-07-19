@@ -12,9 +12,11 @@
 2. Pick a name, a database password (save it), a region. Wait ~2 min.
 3. Left sidebar → **SQL Editor → New query**. Paste in the entire contents
    of `supabase-setup.sql` from this folder, click **Run**.
-4. Left sidebar → **Database → Replication**. Find the `player_state`
-   table and toggle it **on** — this is what lets other devices see
-   playback updates live, instantly.
+4. Left sidebar → **Database → Replication**. Enable **realtime** for
+   **both** the `player_state` and `tracks` tables:
+   - `player_state` — lets other devices see playback position live.
+   - `tracks` — lets other devices see queue adds/removes live (also
+     required so "Listen together" can find a just-added track).
 5. Left sidebar → **Project Settings → API**. Copy the **Project URL**
    and the **anon public** key.
 6. Open `supabase-config.js` in this folder and paste them in:

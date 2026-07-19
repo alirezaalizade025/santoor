@@ -40,5 +40,8 @@ create policy "public read player_state" on player_state for select using (true)
 create policy "public update player_state" on player_state for update using (true);
 
 -- Realtime: after running this, also go to
--- Database → Replication → and enable realtime for the player_state table
--- (this is what lets other devices see playback updates live).
+-- Database → Replication → and enable realtime for BOTH the `player_state`
+-- and `tracks` tables.
+--   • player_state → lets other devices see playback position live.
+--   • tracks       → lets other devices see queue adds/removes live (and is
+--                    required for "Listen together" to find newly-added tracks).

@@ -28,6 +28,7 @@ export const store = {
   peerReapTimer: null,     // removes peers that stopped responding
   connCheckTimer: null,    // watches our own connection
   pendingRemote: null,
+  pendingSyncMsg: '', // set when mirrorPeer can't find a peer's track locally yet
   errorMsg: '',
   isOnline: navigator.onLine,
   loading: true,

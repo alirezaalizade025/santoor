@@ -57,6 +57,12 @@ export function render() {
         </div>
       ` : ''}
 
+      ${store.pendingSyncMsg ? `
+        <div class="cn-banner">
+          <div class="cn-banner-text">${escapeHtml(store.pendingSyncMsg)}</div>
+        </div>
+      ` : ''}
+
       ${store.pendingRemote ? `
         <div class="cn-banner">
           <div class="cn-banner-text">Playing on another device — at ${fmtTime(store.pendingRemote.position_seconds || 0)}</div>

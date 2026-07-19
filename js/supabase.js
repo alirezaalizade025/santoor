@@ -52,3 +52,19 @@ export function subscribeToPlayerState(onChange) {
     })
     .subscribe();
 }
+
+// Realtime for the shared queue: mirror INSERT/DELETE on `tracks` so every
+// device's queue stays live without a manual reload. Requires Realtime enabled
+// for the `tracks` table in Supabase (Database → Replication). Without it, adds
+// and removes only appear after a page refresh — and "Listen together" silently
+// fails when a follower's client never loaded the leader's newly-added track.
+export function subscribeToTracks(onInsert, onDelete) {
+  return store.db.channel('tracks_changes')
+    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'tracks' }, (payload) => {
+      if (payload.new) onInsert(payload.new);
+    })
+    .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'tracks' }, (payload) => {
+      if (payload.old && payload.old.id) onDelete(payload.old.id);
+    })
+    .subscribe();
+}

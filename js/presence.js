@@ -234,7 +234,15 @@ function stopHeartbeat() {
 export function mirrorPeer(peer) {
   if (!peer.track_id) return;
   const idx = store.queue.findIndex((t) => t.id === peer.track_id);
-  if (idx === -1) return;
+  if (idx === -1) {
+    // The leader is on a track this device hasn't loaded yet (e.g. it was just
+    // added and the tracks Realtime subscription hasn't delivered it). Surface a
+    // visible, non-blocking banner instead of silently doing nothing, so the
+    // failure mode is debuggable. It clears itself once the track arrives.
+    if (!store.pendingSyncMsg) { store.pendingSyncMsg = 'Waiting for a track to sync…'; render(); }
+    return;
+  }
+  if (store.pendingSyncMsg) { store.pendingSyncMsg = ''; render(); }
   const elapsed = peer.is_playing ? (Date.now() - (peer.updated_at || Date.now())) / 1000 : 0;
   const targetTime = (peer.position_seconds || 0) + elapsed;
 
@@ -269,6 +277,7 @@ export function startFollowing(peerId) {
 
 export function stopFollowing() {
   store.followingId = null;
+  store.pendingSyncMsg = '';
   clearInterval(store.followDriftTimer);
   broadcastPresence(true);
   render();
