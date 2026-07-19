@@ -82,8 +82,15 @@ export function loadTrack(index, autoplay, seekTo) {
   store.duration = 0;
   updateMetadata(track);
   if (autoplay) {
-    audio.play().then(() => { store.isPlaying = true; broadcastPresence(true); broadcastPlay(); render(); })
-      .catch(() => { store.isPlaying = false; showError('Could not play this track — the source may block playback.'); broadcastPresence(true); });
+    audio.play().then(() => { store.isPlaying = true; store.autoplayBlocked = false; broadcastPresence(true); broadcastPlay(); render(); })
+      .catch(() => {
+        store.isPlaying = false;
+        // When mirroring a leader, a rejected play() is an autoplay-policy block,
+        // not a broken source — offer "Tap to join playback" instead of an error.
+        if (store.followingId) { store.autoplayBlocked = true; render(); }
+        else showError('Could not play this track — the source may block playback.');
+        broadcastPresence(true);
+      });
   } else {
     store.isPlaying = false;
     broadcastPresence(true);
@@ -129,7 +136,12 @@ export function togglePlay() {
 
 export function toggleLoop() { if (store.followingId) return; store.loop = !store.loop; render(); }
 
-export function next() {
+// Called from a real user gesture (the "Tap to join playback" button) after a
+// mirrored autoplay was blocked. A genuine gesture satisfies the autoplay policy.
+export function joinPlayback() {
+  store.autoplayBlocked = false;
+  audio.play().then(() => { store.isPlaying = true; render(); }).catch(() => { store.autoplayBlocked = true; render(); });
+}export function next() {
   if (store.followingId) return;
   if (store.currentIndex < store.queue.length - 1) { loadTrack(store.currentIndex + 1, true); persistPosition(true); broadcastPresence(true); }
 }
@@ -187,12 +199,17 @@ export function attachAudioListeners() {
   audio.addEventListener('timeupdate', () => {
     store.currentTime = audio.currentTime;
     updatePositionState(audio.currentTime, store.duration);
-    if (Math.floor(audio.currentTime) % 5 === 0) {
-      if (!store.followingId) persistPosition(false);
-      broadcastPresence(false);
-    }
     render();
   });
+
+  // Periodic persistence/broadcast, decoupled from timeupdate. timeupdate fires
+  // many times per second; a fixed interval re-arms nothing and does the work
+  // exactly once every 5s while a track is loaded.
+  setInterval(() => {
+    if (store.currentIndex === -1) return;
+    if (!store.followingId) persistPosition(false);
+    broadcastPresence(false);
+  }, 5000);
   audio.addEventListener('loadedmetadata', () => {
     store.duration = audio.duration;
     if (store.pendingSeek != null) { try { audio.currentTime = store.pendingSeek; } catch (e) {} store.pendingSeek = null; }

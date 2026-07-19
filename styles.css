@@ -49,6 +49,8 @@ html, body {
 .cn-followed-banner .cn-banner-text { color: #CDEDED; }
 .cn-btn-small { font-family: var(--font-mono); font-size: 11px; padding: 6px 10px; border-radius: 6px; border: 1px solid var(--gold); background: transparent; color: var(--gold); cursor: pointer; }
 .cn-btn-small:hover { background: var(--gold); color: #17161B; }
+.cn-btn-small:disabled { opacity: 0.4; cursor: not-allowed; }
+.cn-btn-small:disabled:hover { background: transparent; color: var(--gold); }
 
 .cn-offline-banner { background: #2A2831; border: 1px solid var(--line); border-radius: 10px; padding: 10px 14px; margin-bottom: 20px; font-family: var(--font-mono); font-size: 11px; color: var(--text-dim); }
 

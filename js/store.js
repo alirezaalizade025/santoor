@@ -5,7 +5,20 @@
 export const audio = new Audio();
 audio.preload = 'metadata';
 
-export const DEVICE_ID = 'dev-' + Math.random().toString(36).slice(2, 8);
+// Stable per-device id, persisted in localStorage so it survives reloads and
+// two tabs on the same phone count as one device (not two phantom listeners).
+// Falls back to an in-memory id if storage is unavailable (private mode, etc.).
+function loadDeviceId() {
+  try {
+    const saved = localStorage.getItem('santoor:device-id');
+    if (saved) return saved;
+  } catch (e) {}
+  const id = 'dev-' + Math.random().toString(36).slice(2, 10);
+  try { localStorage.setItem('santoor:device-id', id); } catch (e) {}
+  return id;
+}
+
+export const DEVICE_ID = loadDeviceId();
 
 export const store = {
   db: null,
@@ -29,6 +42,7 @@ export const store = {
   connCheckTimer: null,    // watches our own connection
   pendingRemote: null,
   pendingSyncMsg: '', // set when mirrorPeer can't find a peer's track locally yet
+  autoplayBlocked: false, // set when a mirrored play() is rejected by autoplay policy
   errorMsg: '',
   isOnline: navigator.onLine,
   loading: true,

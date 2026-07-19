@@ -243,7 +243,12 @@ export function mirrorPeer(peer) {
     return;
   }
   if (store.pendingSyncMsg) { store.pendingSyncMsg = ''; render(); }
-  const elapsed = peer.is_playing ? (Date.now() - (peer.updated_at || Date.now())) / 1000 : 0;
+  // elapsed uses each device's local clock (peer.updated_at is stamped on the
+  // sender). Clock skew between devices can make this wildly wrong, so clamp it
+  // to a sane max (a legit gap between updates is small — we broadcast ~every 2s
+  // while playing). The periodic drift-correction below then converges it.
+  const rawElapsed = peer.is_playing ? (Date.now() - (peer.updated_at || Date.now())) / 1000 : 0;
+  const elapsed = Math.min(Math.max(rawElapsed, 0), 10);
   const targetTime = (peer.position_seconds || 0) + elapsed;
 
   if (store.currentIndex !== idx) {
@@ -252,7 +257,12 @@ export function mirrorPeer(peer) {
   }
   if (peer.is_playing && !store.isPlaying) {
     audio.currentTime = targetTime;
-    audio.play().then(() => { store.isPlaying = true; render(); }).catch(() => {});
+    audio.play()
+      .then(() => { store.isPlaying = true; store.autoplayBlocked = false; render(); })
+      // A mirrored play() (no direct user gesture) can be rejected by the
+      // browser's autoplay policy. Surface a "Tap to join playback" button
+      // whose click handler calls audio.play() from a real gesture.
+      .catch(() => { store.autoplayBlocked = true; render(); });
   } else if (!peer.is_playing && store.isPlaying) {
     audio.pause();
     store.isPlaying = false;
@@ -270,7 +280,7 @@ export function startFollowing(peerId) {
   store.followDriftTimer = setInterval(() => {
     const p = store.onlineUsers.find((u) => u.id === store.followingId);
     if (p) mirrorPeer(p);
-  }, 4000);
+  }, 2000);
   broadcastPresence(true);
   render();
 }
@@ -278,6 +288,7 @@ export function startFollowing(peerId) {
 export function stopFollowing() {
   store.followingId = null;
   store.pendingSyncMsg = '';
+  store.autoplayBlocked = false;
   clearInterval(store.followDriftTimer);
   broadcastPresence(true);
   render();

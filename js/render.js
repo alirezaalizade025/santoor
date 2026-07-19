@@ -1,7 +1,7 @@
 // View layer: builds the entire UI into #santoor-root and wires DOM events.
 import { store, DEVICE_ID } from './store.js';
 import { fmtTime, escapeHtml } from './util.js';
-import { togglePlay, toggleLoop, next, prev, seekTo, addTrack, removeTrack, applyRemote, loadTrack, persistPosition } from './player.js';
+import { togglePlay, toggleLoop, next, prev, seekTo, addTrack, removeTrack, applyRemote, loadTrack, persistPosition, joinPlayback } from './player.js';
 import { startFollowing, stopFollowing, broadcastPresence } from './presence.js';
 import { saveNickname } from './identity.js';
 
@@ -53,6 +53,15 @@ export function render() {
           <div class="cn-banner-text">Listening together with ${escapeHtml(followingPeer.nickname)} — controls are locked to stay in sync</div>
           <div class="cn-banner-actions">
             <button class="cn-btn-small" id="cn-stop-following">Stop</button>
+          </div>
+        </div>
+      ` : ''}
+
+      ${store.autoplayBlocked ? `
+        <div class="cn-banner">
+          <div class="cn-banner-text">Playback is ready but your browser blocked autoplay.</div>
+          <div class="cn-banner-actions">
+            <button class="cn-btn-small" id="cn-join-playback">Tap to join playback</button>
           </div>
         </div>
       ` : ''}
@@ -122,18 +131,26 @@ export function render() {
       ${store.dbReady && store.onlineUsers.length > 0 ? `
         <div class="cn-section-label">Listening now</div>
         <div class="cn-listeners">
-          ${store.onlineUsers.map((u) => `
+          ${store.onlineUsers.map((u) => {
+            // Prevent a mutual follow loop: if this peer is already following us,
+            // both players would lock onto each other and drift. Disable our
+            // button toward them and explain why. (Deliberate: one-directional.)
+            const followsMe = u.following_id === DEVICE_ID;
+            const isFollowing = store.followingId === u.id;
+            const disabled = followsMe && !isFollowing;
+            return `
             <div class="cn-listener-item">
               <span class="cn-listener-dot"></span>
               <div class="cn-listener-info">
                 <div class="cn-listener-name">${escapeHtml(u.nickname || 'Listener')}</div>
                 <div class="cn-listener-status">${u.track_title ? (u.is_playing ? 'Playing — ' : 'Paused — ') + escapeHtml(u.track_title) : 'Idle'}</div>
               </div>
-              <button class="cn-btn-small ${store.followingId === u.id ? 'cn-btn-active' : ''}" data-follow="${u.id}">
-                ${store.followingId === u.id ? 'Following' : 'Listen together'}
+              <button class="cn-btn-small ${isFollowing ? 'cn-btn-active' : ''}" data-follow="${u.id}" ${disabled ? 'disabled' : ''} title="${disabled ? 'They\'re already listening together with you' : 'Mirror this listener\'s playback'}">
+                ${isFollowing ? 'Following' : (disabled ? 'Listening with you' : 'Listen together')}
               </button>
             </div>
-          `).join('')}
+          `;
+          }).join('')}
         </div>
       ` : ''}
 
@@ -199,4 +216,5 @@ function attachHandlers() {
     });
   });
   const stopBtn = document.getElementById('cn-stop-following'); if (stopBtn) stopBtn.onclick = stopFollowing;
+  const joinBtn = document.getElementById('cn-join-playback'); if (joinBtn) joinBtn.onclick = joinPlayback;
 }
