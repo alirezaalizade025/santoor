@@ -14,6 +14,14 @@ export function render() {
   if (store.nowPlayingOpen && !track) store.nowPlayingOpen = false;
   const nickEl = document.getElementById('cn-nickname-input');
   const nickVal = (nickEl && document.activeElement === nickEl) ? nickEl.value : store.nickname;
+  // Preserve the URL input's focus and in-progress text across re-renders.
+  // Playback fires render() on every timeupdate, which would otherwise wipe
+  // the field and steal focus while the user is typing a new track URL.
+  const urlEl = document.getElementById('cn-url-input');
+  const urlFocused = urlEl && document.activeElement === urlEl;
+  const urlVal = urlFocused ? urlEl.value : '';
+  const selStart = urlFocused ? urlEl.selectionStart : null;
+  const selEnd = urlFocused ? urlEl.selectionEnd : null;
   const progressPct = store.duration ? (store.currentTime / store.duration) * 100 : 0;
   // When the real-signal AnalyserNode is driving the waveform, render flat bars
   // that waveform.js animates directly (its RAF loop overwrites the heights). If
@@ -124,7 +132,7 @@ export function render() {
       ` : ''}
 
       <div class="cn-input-row">
-        <input class="cn-input" id="cn-url-input" aria-label="Track URL" placeholder="Paste a track URL (https://...)" ${store.dbReady && !store.addingTrack ? '' : 'disabled'} />
+        <input class="cn-input" id="cn-url-input" aria-label="Track URL" placeholder="Paste a track URL (https://...)" value="${escapeHtml(urlVal)}" ${store.dbReady && !store.addingTrack ? '' : 'disabled'} />
         <button class="cn-add-btn" id="cn-add-btn" ${store.dbReady && !store.addingTrack ? '' : 'disabled'}>${store.addingTrack ? 'Checking…' : 'Add'}</button>
       </div>
       ${store.errorMsg ? `<div class="cn-error">${escapeHtml(store.errorMsg)}</div>` : ''}
@@ -282,7 +290,13 @@ function attachHandlers() {
   const urlInput = document.getElementById('cn-url-input');
   const addBtn = document.getElementById('cn-add-btn');
   if (addBtn) addBtn.onclick = () => { addTrack(urlInput.value); urlInput.value = ''; };
-  if (urlInput) urlInput.onkeydown = (e) => { if (e.key === 'Enter') { addTrack(urlInput.value); urlInput.value = ''; } };
+  if (urlInput) {
+    if (urlFocused && document.activeElement !== urlInput) {
+      urlInput.focus();
+      if (selStart !== null) urlInput.setSelectionRange(selStart, selEnd);
+    }
+    urlInput.onkeydown = (e) => { if (e.key === 'Enter') { addTrack(urlInput.value); urlInput.value = ''; } };
+  }
 
   const playBtn = document.getElementById('cn-play'); if (playBtn) playBtn.onclick = togglePlay;
   const prevBtn = document.getElementById('cn-prev'); if (prevBtn) prevBtn.onclick = prev;

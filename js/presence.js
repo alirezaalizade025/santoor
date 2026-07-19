@@ -5,6 +5,17 @@ import { store, audio, DEVICE_ID } from './store.js';
 import { render } from './render.js';
 import { loadTrack } from './player.js';
 
+// Send a channel broadcast. Newer @supabase/realtime-js deprecates plain
+// `channel.send()` when it auto-falls back to the REST API (which logs a noisy
+// warning every call). Prefer the explicit `httpSend()` for REST delivery so
+// the warning never fires; fall back to `send()` on older SDKs.
+function channelSend(payload) {
+  const ch = store.presenceChannel;
+  if (!ch) return;
+  if (typeof ch.httpSend === 'function') ch.httpSend(payload);
+  else ch.send(payload);
+}
+
 export function myPresencePayload() {
   const track = store.currentIndex !== -1 ? store.queue[store.currentIndex] : null;
   return {
@@ -115,7 +126,7 @@ export function initPresence() {
       if (!payload || !payload.peer) return;
       markPeerSeen(payload.peer.id);
       upsertPeer(payload.peer);
-      store.presenceChannel.send({
+        channelSend({
         type: 'broadcast',
         event: 'reply',
         payload: {
@@ -160,7 +171,7 @@ export function initPresence() {
     .on('broadcast', { event: 'ping' }, ({ payload }) => {
       if (!payload || !payload.id) return;
       markPeerSeen(payload.id);
-      store.presenceChannel.send({ type: 'broadcast', event: 'pong', payload: { id: DEVICE_ID } });
+      channelSend({ type: 'broadcast', event: 'pong', payload: { id: DEVICE_ID } });
     })
     .on('broadcast', { event: 'pong' }, ({ payload }) => {
       if (!payload || !payload.id) return;
@@ -183,7 +194,7 @@ export function initPresence() {
         broadcastPresence(true);
         // Announce arrival so existing members send us their current state.
         // Sent only here (not on receiving replies) so the process runs once.
-        store.presenceChannel.send({
+      channelSend({
           type: 'broadcast',
           event: 'join',
           payload: { peer: Object.assign({ id: DEVICE_ID }, myPresencePayload()) }
@@ -213,7 +224,7 @@ function startHeartbeat() {
   // is down to avoid the noisy "falling back to REST API" spam during reconnects.
   store.pingTimer = setInterval(() => {
     if (!store.presenceChannel || !store.connectionHealthy) return;
-    store.presenceChannel.send({ type: 'broadcast', event: 'ping', payload: { id: DEVICE_ID } });
+    channelSend({ type: 'broadcast', event: 'ping', payload: { id: DEVICE_ID } });
     broadcastPresence(false);
   }, PING_INTERVAL);
 
@@ -319,14 +330,14 @@ export function becomeHost() {
   broadcastPresence(true);
   // Immediate, non-throttled announcement so the "Join session" button appears
   // on peers at once (presence .track() alone can lag or be dropped).
-  store.presenceChannel?.send({ type: 'broadcast', event: 'hosting', payload: { id: DEVICE_ID, hosting: true, nickname: store.nickname } });
+  channelSend({ type: 'broadcast', event: 'hosting', payload: { id: DEVICE_ID, hosting: true, nickname: store.nickname } });
   render();
 }
 
 export function stopHosting() {
   store.isHost = false;
   broadcastPresence(true);
-  store.presenceChannel?.send({ type: 'broadcast', event: 'hosting', payload: { id: DEVICE_ID, hosting: false, nickname: store.nickname } });
+  channelSend({ type: 'broadcast', event: 'hosting', payload: { id: DEVICE_ID, hosting: false, nickname: store.nickname } });
   render();
 }
 
