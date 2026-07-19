@@ -73,12 +73,41 @@ function broadcastPlay() {
   });
 }
 
+// Record a track into the per-device recently-played history (newest first,
+// deduped so replays move to the top rather than piling up, capped at 50).
+const HISTORY_MAX = 50;
+export function recordHistory(track) {
+  if (!track) return;
+  store.history = store.history.filter((h) => h.id !== track.id);
+  store.history.unshift({ id: track.id, title: track.title, host: track.host, url: track.url, at: Date.now() });
+  if (store.history.length > HISTORY_MAX) store.history.length = HISTORY_MAX;
+  try { localStorage.setItem('santoor:history', JSON.stringify(store.history)); } catch (e) {}
+}
+
+export function clearHistory() {
+  store.history = [];
+  try { localStorage.removeItem('santoor:history'); } catch (e) {}
+  render();
+}
+
+// Play a track from the history list. If it's still in the queue, jump to it;
+// otherwise re-add it to the queue (which the realtime insert will share) and
+// play once it lands.
+export async function playFromHistory(id) {
+  if (store.followingId) return;
+  const idx = store.queue.findIndex((t) => t.id === id);
+  if (idx !== -1) { loadTrack(idx, true); persistPosition(true); broadcastPresence(true); return; }
+  const h = store.history.find((x) => x.id === id);
+  if (h && h.url) addTrack(h.url);
+}
+
 export function loadTrack(index, autoplay, seekTo) {
   if (index < 0 || index >= store.queue.length) return;
   store.currentIndex = index;
   // Track shuffle history so a shuffle cycle doesn't repeat until exhausted.
   if (store.shuffle && !store.shuffleHistory.includes(index)) store.shuffleHistory.push(index);
   const track = store.queue[index];
+  if (autoplay) recordHistory(track);
   store.pendingSeek = seekTo || 0;
   audio.src = track.url;
   store.duration = 0;

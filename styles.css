@@ -119,6 +119,12 @@ html, body {
 
 .cn-empty-queue { font-family: var(--font-mono); font-size: 12px; color: var(--text-dim); padding: 20px 0; text-align: center; border: 1px dashed var(--line); border-radius: 10px; }
 
+.cn-history-label { display: flex; align-items: center; justify-content: space-between; cursor: pointer; margin-top: 24px; user-select: none; }
+.cn-history-label:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; border-radius: 4px; }
+.cn-history-caret { color: var(--text-dim); }
+.cn-history-item { cursor: pointer; }
+.cn-history-clear { align-self: flex-start; margin-top: 6px; }
+
 .cn-presence-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 16px; }
 .cn-presence-count { font-family: var(--font-mono); font-size: 11px; color: var(--text-dim); }
 .cn-nickname-input { background: var(--bg-raised); border: 1px solid var(--line); border-radius: 6px; padding: 5px 9px; color: var(--text); font-family: var(--font-body); font-size: 12px; outline: none; width: 140px; text-align: right; }

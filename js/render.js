@@ -1,7 +1,7 @@
 // View layer: builds the entire UI into #santoor-root and wires DOM events.
 import { store, DEVICE_ID } from './store.js';
 import { fmtTime, escapeHtml } from './util.js';
-import { togglePlay, toggleLoop, cycleRepeat, toggleShuffle, next, prev, seekTo, addTrack, removeTrack, applyRemote, loadTrack, persistPosition, joinPlayback, setVolume } from './player.js';
+import { togglePlay, toggleLoop, cycleRepeat, toggleShuffle, next, prev, seekTo, addTrack, removeTrack, applyRemote, loadTrack, persistPosition, joinPlayback, setVolume, playFromHistory, clearHistory } from './player.js';
 import { startFollowing, stopFollowing, broadcastPresence } from './presence.js';
 import { saveNickname } from './identity.js';
 
@@ -177,6 +177,25 @@ export function render() {
           </div>
         `).join('')}
       </div>
+
+      ${store.history.length > 0 ? `
+        <div class="cn-section-label cn-history-label" id="cn-history-toggle" role="button" tabindex="0" aria-expanded="${store.historyOpen ? 'true' : 'false'}">
+          <span>Recently played — ${store.history.length}</span>
+          <span class="cn-history-caret">${store.historyOpen ? '▾' : '▸'}</span>
+        </div>
+        ${store.historyOpen ? `
+          <div class="cn-queue cn-history">
+            ${store.history.map((h) => `
+              <div class="cn-queue-item cn-history-item" data-hist="${h.id}" role="button" tabindex="0" title="Play ${escapeHtml(h.title || 'track')}">
+                <span class="cn-queue-idx">↺</span>
+                <span class="cn-queue-title">${escapeHtml(h.title || 'Untitled track')}</span>
+                <span class="cn-queue-dur">${escapeHtml(h.host || '')}</span>
+              </div>
+            `).join('')}
+            <button class="cn-btn-small cn-history-clear" id="cn-history-clear">Clear history</button>
+          </div>
+        ` : ''}
+      ` : ''}
     </div>
 
     ${store.nowPlayingOpen ? `
@@ -270,6 +289,20 @@ function attachHandlers() {
 
   const volume = document.getElementById('cn-volume');
   if (volume) volume.oninput = (e) => setVolume(parseFloat(e.target.value));
+
+  const historyToggle = document.getElementById('cn-history-toggle');
+  if (historyToggle) {
+    const toggle = () => { store.historyOpen = !store.historyOpen; render(); };
+    historyToggle.onclick = toggle;
+    historyToggle.onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(); } };
+  }
+  document.querySelectorAll('[data-hist]').forEach((el) => {
+    const go = () => playFromHistory(el.getAttribute('data-hist'));
+    el.addEventListener('click', go);
+    el.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); go(); } });
+  });
+  const histClear = document.getElementById('cn-history-clear');
+  if (histClear) histClear.onclick = (e) => { e.stopPropagation(); clearHistory(); };
 
   // --- Now Playing full-screen view ---
   const openNp = () => { if (store.currentIndex !== -1) { store.nowPlayingOpen = true; render(); } };

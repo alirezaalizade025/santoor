@@ -67,4 +67,16 @@ export const store = {
   nowPlayingOpen: false, // full-screen Now Playing view visibility
   addingTrack: false,    // true while a pasted URL is being probed before insert
   volume: initialVolume, // per-device, not synced
+  history: loadHistory(),   // recently played: [{id,title,host,url,at}], newest first, per-device
+  historyOpen: false,       // recently-played section expanded
 };
+
+// Recently-played history is a local, per-device list (not shared queue state),
+// so it lives in localStorage. Newest first, capped.
+function loadHistory() {
+  try {
+    const raw = JSON.parse(localStorage.getItem('santoor:history') || '[]');
+    if (Array.isArray(raw)) return raw.slice(0, 50);
+  } catch (e) {}
+  return [];
+}
