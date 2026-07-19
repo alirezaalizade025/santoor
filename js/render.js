@@ -85,8 +85,8 @@ export function render() {
       ` : ''}
 
       <div class="cn-input-row">
-        <input class="cn-input" id="cn-url-input" placeholder="Paste a track URL (https://...)" ${store.dbReady ? '' : 'disabled'} />
-        <button class="cn-add-btn" id="cn-add-btn" ${store.dbReady ? '' : 'disabled'}>Add</button>
+        <input class="cn-input" id="cn-url-input" aria-label="Track URL" placeholder="Paste a track URL (https://...)" ${store.dbReady && !store.addingTrack ? '' : 'disabled'} />
+        <button class="cn-add-btn" id="cn-add-btn" ${store.dbReady && !store.addingTrack ? '' : 'disabled'}>${store.addingTrack ? 'Checking…' : 'Add'}</button>
       </div>
       ${store.errorMsg ? `<div class="cn-error">${escapeHtml(store.errorMsg)}</div>` : ''}
 

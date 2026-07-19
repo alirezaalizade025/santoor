@@ -99,14 +99,53 @@ export function loadTrack(index, autoplay, seekTo) {
   render();
 }
 
+// Probe a pasted URL with a throwaway Audio element before inserting, so an
+// obviously broken/unplayable link is caught here instead of only failing when
+// the user later hits play. Resolves true if metadata loads; false on error or
+// timeout. CORS-blocked-but-playable sources can still fail metadata, so a
+// negative result asks for confirmation rather than hard-blocking the add.
+function probePlayable(url, timeoutMs = 8000) {
+  return new Promise((resolve) => {
+    const probe = new Audio();
+    probe.preload = 'metadata';
+    let done = false;
+    const finish = (ok) => {
+      if (done) return;
+      done = true;
+      clearTimeout(timer);
+      probe.removeAttribute('src');
+      probe.load();
+      resolve(ok);
+    };
+    const timer = setTimeout(() => finish(false), timeoutMs);
+    probe.addEventListener('loadedmetadata', () => finish(true), { once: true });
+    probe.addEventListener('error', () => finish(false), { once: true });
+    probe.src = url;
+  });
+}
+
 export async function addTrack(url) {
   if (!url || !/^https?:\/\//i.test(url.trim())) { showError('Paste a valid track URL starting with http:// or https://'); return; }
   if (!store.dbReady) { showError('Database not configured — add your Supabase URL and key to supabase-config.js first.'); return; }
   const cleanUrl = url.trim();
+
+  // Duplicate guard: don't create a second row for a URL already in the queue.
+  if (store.queue.some((t) => t.url === cleanUrl)) { showError('That track is already in the queue.'); return; }
+
+  // Pre-add validation probe: catch obviously broken links before inserting.
+  store.addingTrack = true; render();
+  const playable = await probePlayable(cleanUrl);
+  store.addingTrack = false; render();
+  if (!playable) {
+    const proceed = window.confirm('This link did not load as playable audio (it may be broken, or the source may block cross-origin loading). Add it anyway?');
+    if (!proceed) return;
+  }
+
   const title = guessTitle(cleanUrl);
   const host = urlHost(cleanUrl);
   const row = await createTrack(cleanUrl, title, host);
   if (!row) return;
+  if (store.queue.some((t) => t.id === row.id)) { render(); return; } // realtime may have raced us in
   store.queue.push(row);
   if (store.currentIndex === -1) { store.currentIndex = 0; loadTrack(0, false); persistPosition(true); }
   render();

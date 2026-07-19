@@ -49,4 +49,5 @@ export const store = {
   loop: false,
   nickname: '',
   nowPlayingOpen: false, // full-screen Now Playing view visibility
+  addingTrack: false,    // true while a pasted URL is being probed before insert
 };
