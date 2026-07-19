@@ -92,8 +92,14 @@ html, body {
 .cn-loop-active { color: var(--gold); }
 .cn-play-btn:hover { opacity: 0.9; }
 
-.cn-section-label { font-family: var(--font-mono); font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-dim); margin-bottom: 10px; }
-.cn-queue { display: flex; flex-direction: column; gap: 6px; }
+.cn-volume-row { display: flex; align-items: center; gap: 10px; margin-top: 18px; }
+.cn-volume-icon { color: var(--text-dim); flex-shrink: 0; }
+.cn-volume { flex: 1; -webkit-appearance: none; appearance: none; height: 4px; border-radius: 2px; background: var(--line); outline: none; cursor: pointer; }
+.cn-volume::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 14px; height: 14px; border-radius: 50%; background: var(--gold); border: none; cursor: pointer; }
+.cn-volume::-moz-range-thumb { width: 14px; height: 14px; border-radius: 50%; background: var(--gold); border: none; cursor: pointer; }
+.cn-volume:focus-visible { outline: 2px solid var(--gold); outline-offset: 4px; }
+
+.cn-section-label { font-family: var(--font-mono); font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-dim); margin-bottom: 10px; }.cn-queue { display: flex; flex-direction: column; gap: 6px; }
 .cn-queue-item { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 8px; border: 1px solid transparent; cursor: pointer; }
 .cn-queue-item:hover { background: var(--bg-raised); }
 .cn-queue-item.active { background: var(--bg-raised); border-color: var(--gold-dim); }

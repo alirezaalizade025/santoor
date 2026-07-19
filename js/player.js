@@ -175,6 +175,16 @@ export function togglePlay() {
 
 export function toggleLoop() { if (store.followingId) return; store.loop = !store.loop; render(); }
 
+// Per-device volume (0..1). A local preference, NOT synced across Listen
+// together (unlike position/play-state), and persisted to localStorage.
+export function setVolume(v) {
+  const vol = Math.min(Math.max(v, 0), 1);
+  store.volume = vol;
+  audio.volume = vol;
+  try { localStorage.setItem('santoor:volume', String(vol)); } catch (e) {}
+  render();
+}
+
 // Called from a real user gesture (the "Tap to join playback" button) after a
 // mirrored autoplay was blocked. A genuine gesture satisfies the autoplay policy.
 export function joinPlayback() {

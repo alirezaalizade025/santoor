@@ -20,6 +20,19 @@ function loadDeviceId() {
 
 export const DEVICE_ID = loadDeviceId();
 
+// Per-device volume (0..1). A local playback preference — intentionally NOT
+// synced across "Listen together", unlike position/play-state. Persisted so it
+// survives reloads.
+function loadVolume() {
+  try {
+    const v = parseFloat(localStorage.getItem('santoor:volume'));
+    if (isFinite(v) && v >= 0 && v <= 1) return v;
+  } catch (e) {}
+  return 1;
+}
+export const initialVolume = loadVolume();
+audio.volume = initialVolume;
+
 export const store = {
   db: null,
   dbReady: false,
@@ -50,4 +63,5 @@ export const store = {
   nickname: '',
   nowPlayingOpen: false, // full-screen Now Playing view visibility
   addingTrack: false,    // true while a pasted URL is being probed before insert
+  volume: initialVolume, // per-device, not synced
 };

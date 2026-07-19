@@ -1,7 +1,7 @@
 // View layer: builds the entire UI into #santoor-root and wires DOM events.
 import { store, DEVICE_ID } from './store.js';
 import { fmtTime, escapeHtml } from './util.js';
-import { togglePlay, toggleLoop, next, prev, seekTo, addTrack, removeTrack, applyRemote, loadTrack, persistPosition, joinPlayback } from './player.js';
+import { togglePlay, toggleLoop, next, prev, seekTo, addTrack, removeTrack, applyRemote, loadTrack, persistPosition, joinPlayback, setVolume } from './player.js';
 import { startFollowing, stopFollowing, broadcastPresence } from './presence.js';
 import { saveNickname } from './identity.js';
 
@@ -124,9 +124,14 @@ export function render() {
           <button class="cn-ctrl-btn" id="cn-next" ${store.currentIndex === -1 || store.currentIndex >= store.queue.length - 1 || store.followingId ? 'disabled' : ''} title="Next">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M16 6h2v12h-2zM6 6l8.5 6L6 18z"/></svg>
           </button>
-          <button class="cn-ctrl-btn ${store.loop ? 'cn-loop-active' : ''}" id="cn-loop" ${store.followingId ? 'disabled' : ''} title="Loop queue">
+          <button class="cn-ctrl-btn ${store.loop ? 'cn-loop-active' : ''}" id="cn-loop" ${store.followingId ? 'disabled' : ''} title="Loop queue" aria-label="Loop queue" aria-pressed="${store.loop ? 'true' : 'false'}">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M7 7h10v3l4-4-4-4v3H5v6h2V7zm10 10H7v-3l-4 4 4 4v-3h12v-6h-2v4z"/></svg>
           </button>
+        </div>
+
+        <div class="cn-volume-row">
+          <svg class="cn-volume-icon" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M3 10v4h4l5 5V5L7 10H3zm13.5 2a4.5 4.5 0 00-2.5-4.03v8.06A4.5 4.5 0 0016.5 12z"/></svg>
+          <input class="cn-volume" id="cn-volume" type="range" min="0" max="1" step="0.01" value="${store.volume}" aria-label="Volume" title="Volume (this device only)" />
         </div>
       </div>
 
@@ -257,6 +262,9 @@ function attachHandlers() {
   });
   const stopBtn = document.getElementById('cn-stop-following'); if (stopBtn) stopBtn.onclick = stopFollowing;
   const joinBtn = document.getElementById('cn-join-playback'); if (joinBtn) joinBtn.onclick = joinPlayback;
+
+  const volume = document.getElementById('cn-volume');
+  if (volume) volume.oninput = (e) => setVolume(parseFloat(e.target.value));
 
   // --- Now Playing full-screen view ---
   const openNp = () => { if (store.currentIndex !== -1) { store.nowPlayingOpen = true; render(); } };
