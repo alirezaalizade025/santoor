@@ -3,6 +3,26 @@
 import { store, DEVICE_ID } from './store.js';
 import { showError } from './util.js';
 
+// Retry a Supabase call a few times with exponential backoff before giving up.
+// Transient network blips (mobile handoff, flaky wifi) otherwise fail a write
+// outright. `fn` must return the Supabase `{ data, error }` shape; we retry when
+// it throws OR returns an error, and resolve with the first success.
+async function withRetry(label, fn, attempts = 3) {
+  let lastErr = null;
+  for (let i = 0; i < attempts; i++) {
+    try {
+      const res = await fn();
+      if (!res || !res.error) return res;
+      lastErr = res.error;
+    } catch (e) {
+      lastErr = e;
+    }
+    if (i < attempts - 1) await new Promise((r) => setTimeout(r, 400 * Math.pow(2, i)));
+  }
+  console.error(label + ' failed after ' + attempts + ' attempts', lastErr);
+  return { data: null, error: lastErr };
+}
+
 export function initSupabase() {
   const cfg = window.SUPABASE_CONFIG || {};
   if (!cfg.url || !cfg.anonKey) return false;
@@ -22,14 +42,16 @@ export async function fetchTracks() {
 }
 
 export async function createTrack(url, title, host) {
-  const { data, error } = await store.db.from('tracks').insert({ url, title, host }).select().single();
-  if (error) { console.error('createTrack error', error); showError('Could not save that track — check your Supabase setup.'); return null; }
+  const { data, error } = await withRetry('createTrack',
+    () => store.db.from('tracks').insert({ url, title, host }).select().single());
+  if (error) { showError('Could not save that track — check your Supabase setup or connection.'); return null; }
   return data;
 }
 
 export async function deleteTrack(id) {
-  const { error } = await store.db.from('tracks').delete().eq('id', id);
-  if (error) { console.error('deleteTrack error', error); showError('Could not remove that track.'); return false; }
+  const { error } = await withRetry('deleteTrack',
+    () => store.db.from('tracks').delete().eq('id', id));
+  if (error) { showError('Could not remove that track — check your connection.'); return false; }
   return true;
 }
 
@@ -41,8 +63,8 @@ export async function fetchPlayerState() {
 
 export async function savePlayerState(partial) {
   const payload = Object.assign({ id: 1, updated_by: DEVICE_ID, updated_at: new Date().toISOString() }, partial);
-  const { error } = await store.db.from('player_state').update(payload).eq('id', 1);
-  if (error) console.error('savePlayerState error', error);
+  await withRetry('savePlayerState',
+    () => store.db.from('player_state').update(payload).eq('id', 1));
 }
 
 export function subscribeToPlayerState(onChange) {
