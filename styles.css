@@ -123,3 +123,73 @@ html, body {
   .cn-title { font-size: 24px; }
   .cn-controls { gap: 14px; }
 }
+
+/* --- Now Playing full-screen view --- */
+.cn-now-playing-tappable { cursor: pointer; border-radius: 12px; margin: -6px; padding: 6px; transition: background 0.15s; }
+.cn-now-playing-tappable:hover { background: var(--bg); }
+.cn-now-playing-tappable:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+
+.cn-np {
+  position: fixed; inset: 0; z-index: 50;
+  background: var(--bg);
+  display: flex; flex-direction: column; align-items: center;
+  padding: max(20px, env(safe-area-inset-top)) 20px max(24px, env(safe-area-inset-bottom));
+  animation: cn-np-in 0.25s ease;
+}
+@keyframes cn-np-in { from { opacity: 0; transform: translateY(2%); } to { opacity: 1; transform: translateY(0); } }
+
+.cn-np-close {
+  position: absolute; top: max(16px, env(safe-area-inset-top)); right: 18px;
+  background: var(--bg-raised); border: 1px solid var(--line); color: var(--text);
+  width: 40px; height: 40px; border-radius: 50%; cursor: pointer;
+  display: flex; align-items: center; justify-content: center; opacity: 0.9;
+}
+.cn-np-close:hover { opacity: 1; }
+.cn-np-close:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+
+/* Top half: two large tap zones (left = prev, right = next). */
+.cn-np-tapzones { display: flex; width: 100%; flex: 1 1 50%; gap: 12px; margin-top: 44px; }
+.cn-np-tap {
+  flex: 1; background: var(--bg-raised); border: 1px solid var(--line);
+  border-radius: 16px; color: var(--text); cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: background 0.15s, opacity 0.15s;
+}
+.cn-np-tap:hover:not(:disabled) { background: var(--line); }
+.cn-np-tap:active:not(:disabled) { background: var(--gold-dim); }
+.cn-np-tap:disabled { opacity: 0.3; cursor: not-allowed; }
+.cn-np-tap:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+.cn-np-tap-hint { display: flex; flex-direction: column; align-items: center; gap: 8px; font-family: var(--font-mono); font-size: 12px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.08em; }
+
+.cn-np-meta { text-align: center; margin: 26px 0 18px; width: 100%; }
+.cn-np-title { font-family: var(--font-display); font-size: 26px; font-weight: 600; line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cn-np-sub { font-family: var(--font-mono); font-size: 12px; color: var(--text-dim); margin-top: 6px; }
+
+/* Dominant play/pause button. */
+.cn-np-play {
+  background: var(--gold); color: #17161B; border: none; border-radius: 50%;
+  width: 104px; height: 104px; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 8px 30px rgba(232, 163, 61, 0.28);
+  margin-bottom: 22px; transition: transform 0.1s, opacity 0.15s;
+}
+.cn-np-play:hover:not(:disabled) { opacity: 0.92; }
+.cn-np-play:active:not(:disabled) { transform: scale(0.96); }
+.cn-np-play:disabled { opacity: 0.3; cursor: not-allowed; box-shadow: none; }
+.cn-np-play:focus-visible { outline: 3px solid var(--text); outline-offset: 4px; }
+
+/* Large timer — the in-app "lock screen" answer. */
+.cn-np-timer { font-family: var(--font-mono); font-size: 40px; font-weight: 500; letter-spacing: 0.02em; display: flex; align-items: baseline; gap: 10px; margin-bottom: 20px; }
+.cn-np-time-cur { color: var(--text); }
+.cn-np-time-sep { color: var(--text-dim); font-size: 30px; }
+.cn-np-time-dur { color: var(--text-dim); }
+
+.cn-np-progress { width: 100%; max-width: 420px; height: 6px; background: var(--line); border-radius: 3px; position: relative; cursor: pointer; }
+.cn-np-progress-fill { position: absolute; left: 0; top: 0; bottom: 0; background: var(--gold); border-radius: 3px; }
+
+@media (max-width: 420px) {
+  .cn-np-timer { font-size: 34px; }
+  .cn-np-time-sep { font-size: 26px; }
+  .cn-np-play { width: 92px; height: 92px; }
+  .cn-np-title { font-size: 22px; }
+}

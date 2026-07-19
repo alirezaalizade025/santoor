@@ -48,4 +48,5 @@ export const store = {
   loading: true,
   loop: false,
   nickname: '',
+  nowPlayingOpen: false, // full-screen Now Playing view visibility
 };

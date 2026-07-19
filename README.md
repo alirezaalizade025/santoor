@@ -59,7 +59,14 @@ Jekyll processing interferes with plain static sites.
   Supabase Realtime, so when you pause on your phone, your laptop sees it
   within about a second and offers to pick up from that exact spot.
 
-## Listen together (new)
+## Now Playing view
+- Tap the mini-player (track art / title area) to open a full-screen
+  **Now Playing** view. The top half is split into two large tap zones —
+  left = previous track, right = next track — with a large play/pause
+  button and an oversized current/total timer below. Close it with the ✕
+  in the corner. It reuses the same colors/fonts as the rest of the app.
+
+
 - The header shows how many people currently have the app open (🟢 N
   listening now) — this uses Supabase Realtime **Presence**, a WebSocket
   feature, separate from the database sync above. Nobody needs to be

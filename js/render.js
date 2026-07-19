@@ -9,6 +9,8 @@ const root = document.getElementById('santoor-root');
 
 export function render() {
   const track = store.currentIndex !== -1 ? store.queue[store.currentIndex] : null;
+  // Never keep the full-screen view open with nothing to show.
+  if (store.nowPlayingOpen && !track) store.nowPlayingOpen = false;
   const nickEl = document.getElementById('cn-nickname-input');
   const nickVal = (nickEl && document.activeElement === nickEl) ? nickEl.value : store.nickname;
   const progressPct = store.duration ? (store.currentTime / store.duration) * 100 : 0;
@@ -89,7 +91,7 @@ export function render() {
       ${store.errorMsg ? `<div class="cn-error">${escapeHtml(store.errorMsg)}</div>` : ''}
 
       <div class="cn-player">
-        <div class="cn-now-playing">
+        <div class="cn-now-playing ${track ? 'cn-now-playing-tappable' : ''}" id="cn-now-playing" ${track ? 'role="button" tabindex="0" aria-label="Open now playing"' : ''}>
           <div class="cn-art ${store.isPlaying ? 'spinning' : ''}"></div>
           <div class="cn-track-info">
             ${track ? `
@@ -167,6 +169,44 @@ export function render() {
         `).join('')}
       </div>
     </div>
+
+    ${store.nowPlayingOpen ? `
+      <div class="cn-np" id="cn-np">
+        <button class="cn-np-close" id="cn-np-close" aria-label="Close now playing">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M7.4 6l-1.4 1.4 4.6 4.6-4.6 4.6L7.4 18l4.6-4.6 4.6 4.6 1.4-1.4-4.6-4.6 4.6-4.6L16.6 6 12 10.6z"/></svg>
+        </button>
+
+        <div class="cn-np-tapzones">
+          <button class="cn-np-tap cn-np-tap-prev" id="cn-np-prev" ${store.currentIndex <= 0 || store.followingId ? 'disabled' : ''} aria-label="Previous track">
+            <span class="cn-np-tap-hint"><svg width="28" height="28" viewBox="0 0 24 24" fill="currentColor"><path d="M6 6h2v12H6zm3.5 6l8.5 6V6z"/></svg><span>Previous</span></span>
+          </button>
+          <button class="cn-np-tap cn-np-tap-next" id="cn-np-next" ${store.currentIndex === -1 || store.currentIndex >= store.queue.length - 1 || store.followingId ? 'disabled' : ''} aria-label="Next track">
+            <span class="cn-np-tap-hint"><svg width="28" height="28" viewBox="0 0 24 24" fill="currentColor"><path d="M16 6h2v12h-2zM6 6l8.5 6L6 18z"/></svg><span>Next</span></span>
+          </button>
+        </div>
+
+        <div class="cn-np-meta">
+          <div class="cn-np-title">${track ? escapeHtml(track.title || 'Untitled track') : 'Nothing playing'}</div>
+          <div class="cn-np-sub">${track ? escapeHtml(track.host || '') : 'Paste a URL to start'}</div>
+        </div>
+
+        <button class="cn-np-play" id="cn-np-play" ${store.currentIndex === -1 || store.followingId ? 'disabled' : ''} aria-label="${store.isPlaying ? 'Pause' : 'Play'}">
+          ${store.isPlaying
+            ? `<svg width="52" height="52" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="5" width="4" height="14"/><rect x="14" y="5" width="4" height="14"/></svg>`
+            : `<svg width="52" height="52" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>`}
+        </button>
+
+        <div class="cn-np-timer">
+          <span class="cn-np-time-cur">${fmtTime(store.currentTime)}</span>
+          <span class="cn-np-time-sep">/</span>
+          <span class="cn-np-time-dur">${fmtTime(store.duration)}</span>
+        </div>
+
+        <div class="cn-np-progress" id="cn-np-progress">
+          <div class="cn-np-progress-fill" style="width:${progressPct}%"></div>
+        </div>
+      </div>
+    ` : ''}
   `;
   attachHandlers();
 }
@@ -217,4 +257,18 @@ function attachHandlers() {
   });
   const stopBtn = document.getElementById('cn-stop-following'); if (stopBtn) stopBtn.onclick = stopFollowing;
   const joinBtn = document.getElementById('cn-join-playback'); if (joinBtn) joinBtn.onclick = joinPlayback;
+
+  // --- Now Playing full-screen view ---
+  const openNp = () => { if (store.currentIndex !== -1) { store.nowPlayingOpen = true; render(); } };
+  const nowPlaying = document.getElementById('cn-now-playing');
+  if (nowPlaying) {
+    nowPlaying.onclick = openNp;
+    nowPlaying.onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openNp(); } };
+  }
+  const npClose = document.getElementById('cn-np-close'); if (npClose) npClose.onclick = () => { store.nowPlayingOpen = false; render(); };
+  const npPlay = document.getElementById('cn-np-play'); if (npPlay) npPlay.onclick = togglePlay;
+  const npPrev = document.getElementById('cn-np-prev'); if (npPrev) npPrev.onclick = prev;
+  const npNext = document.getElementById('cn-np-next'); if (npNext) npNext.onclick = next;
+  const npProgress = document.getElementById('cn-np-progress');
+  if (npProgress) npProgress.onclick = (e) => { const rect = npProgress.getBoundingClientRect(); seekTo((e.clientX - rect.left) / rect.width); };
 }
