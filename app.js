@@ -1,11 +1,11 @@
 // Entry point. Boots the app: loads identity, connects Supabase, restores the
 // shared player position, then starts presence + audio wiring. Everything is
 // split into focused modules under ./js/ and imported here.
-import { store, audio } from './js/store.js';
+import { store, audio, DEFAULT_PLAYLIST_ID } from './js/store.js';
 import { render } from './js/render.js';
-import { initSupabase, fetchTracks, fetchPlayerState, subscribeToPlayerState, subscribeToTracks } from './js/supabase.js';
+import { initSupabase, fetchPlaylists, subscribeToPlayerState, subscribeToTracks, subscribeToPlaylists } from './js/supabase.js';
 import { initPresence } from './js/presence.js';
-import { loadTrack, attachAudioListeners } from './js/player.js';
+import { loadTrack, attachAudioListeners, loadPlaylistQueue } from './js/player.js';
 import { loadNickname } from './js/identity.js';
 
 // Realtime INSERT on `tracks`: append the new row locally (idempotent — the
@@ -33,6 +33,23 @@ function onTrackDeleted(id) {
   render();
 }
 
+// Realtime playlist INSERT/DELETE so the switcher stays live across devices.
+function onPlaylistInserted(row) {
+  if (store.playlists.some((p) => p.id === row.id)) return;
+  store.playlists.push(row);
+  render();
+}
+function onPlaylistDeleted(id) {
+  store.playlists = store.playlists.filter((p) => p.id !== id);
+  // If the playlist we're viewing was deleted elsewhere, fall back to Default.
+  if (store.activePlaylistId === id) {
+    store.activePlaylistId = DEFAULT_PLAYLIST_ID;
+    try { localStorage.setItem('santoor:playlist', DEFAULT_PLAYLIST_ID); } catch (e) {}
+    loadPlaylistQueue(true);
+  }
+  render();
+}
+
 async function init() {
   store.nickname = loadNickname();
   render();
@@ -40,17 +57,18 @@ async function init() {
   render();
   if (!store.dbReady) { store.loading = false; render(); return; }
 
-  store.queue = await fetchTracks();
-  const remoteState = await fetchPlayerState();
-  if (remoteState && remoteState.current_track_id) {
-    const idx = store.queue.findIndex((t) => t.id === remoteState.current_track_id);
-    if (idx !== -1) loadTrack(idx, false, remoteState.position_seconds || 0);
+  store.playlists = await fetchPlaylists();
+  // If the remembered playlist no longer exists, fall back to Default.
+  if (!store.playlists.some((p) => p.id === store.activePlaylistId)) {
+    store.activePlaylistId = DEFAULT_PLAYLIST_ID;
   }
+  await loadPlaylistQueue(true);
   store.loading = false;
   render();
 
   subscribeToPlayerState((remote) => { if (!store.followingId) { store.pendingRemote = remote; render(); } });
   subscribeToTracks(onTrackInserted, onTrackDeleted);
+  subscribeToPlaylists(onPlaylistInserted, onPlaylistDeleted);
   initPresence();
   attachAudioListeners();
 

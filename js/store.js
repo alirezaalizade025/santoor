@@ -20,6 +20,15 @@ function loadDeviceId() {
 
 export const DEVICE_ID = loadDeviceId();
 
+// Well-known Default playlist id (matches supabase-setup.sql). Pre-playlist
+// tracks and the legacy single player_state row migrate onto this playlist.
+export const DEFAULT_PLAYLIST_ID = '00000000-0000-0000-0000-000000000001';
+
+// Remember the last selected playlist per device so a reload reopens it.
+function loadActivePlaylist() {
+  try { return localStorage.getItem('santoor:playlist') || DEFAULT_PLAYLIST_ID; } catch (e) { return DEFAULT_PLAYLIST_ID; }
+}
+
 // Per-device volume (0..1). A local playback preference — intentionally NOT
 // synced across "Listen together", unlike position/play-state. Persisted so it
 // survives reloads.
@@ -36,6 +45,9 @@ audio.volume = initialVolume;
 export const store = {
   db: null,
   dbReady: false,
+  playlists: [],                         // [{id,name,created_at}]
+  activePlaylistId: loadActivePlaylist(), // which playlist's queue is shown
+  playlistsSupported: true,              // false if the playlists table isn't set up yet
   queue: [],
   currentIndex: -1,
   isPlaying: false,

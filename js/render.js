@@ -1,7 +1,7 @@
 // View layer: builds the entire UI into #santoor-root and wires DOM events.
 import { store, DEVICE_ID } from './store.js';
 import { fmtTime, escapeHtml } from './util.js';
-import { togglePlay, toggleLoop, cycleRepeat, toggleShuffle, next, prev, seekTo, addTrack, removeTrack, applyRemote, loadTrack, persistPosition, joinPlayback, setVolume, playFromHistory, clearHistory } from './player.js';
+import { togglePlay, toggleLoop, cycleRepeat, toggleShuffle, next, prev, seekTo, addTrack, removeTrack, applyRemote, loadTrack, persistPosition, joinPlayback, setVolume, playFromHistory, clearHistory, switchPlaylist, addPlaylist, removePlaylist } from './player.js';
 import { startFollowing, stopFollowing, broadcastPresence, becomeHost, stopHosting, joinHost } from './presence.js';
 import { saveNickname } from './identity.js';
 import { isWaveformActive } from './waveform.js';
@@ -107,6 +107,19 @@ export function render() {
             <button class="cn-btn-small" id="cn-resume-remote">Resume here</button>
             <button class="cn-btn-small" id="cn-dismiss-remote">Dismiss</button>
           </div>
+        </div>
+      ` : ''}
+
+      ${store.dbReady && store.playlistsSupported ? `
+        <div class="cn-playlist-row">
+          <label class="cn-playlist-label" for="cn-playlist-select">Playlist</label>
+          <select class="cn-playlist-select" id="cn-playlist-select" aria-label="Active playlist">
+            ${store.playlists.map((p) => `<option value="${p.id}" ${p.id === store.activePlaylistId ? 'selected' : ''}>${escapeHtml(p.name)}</option>`).join('')}
+          </select>
+          <button class="cn-btn-small" id="cn-playlist-new" title="Create a new playlist">+ New</button>
+          ${store.activePlaylistId !== '00000000-0000-0000-0000-000000000001'
+            ? `<button class="cn-btn-small" id="cn-playlist-del" title="Delete this playlist and all its tracks">Delete</button>`
+            : ''}
         </div>
       ` : ''}
 
@@ -312,6 +325,16 @@ function attachHandlers() {
   });
   const stopBtn = document.getElementById('cn-stop-following'); if (stopBtn) stopBtn.onclick = stopFollowing;
   const joinBtn = document.getElementById('cn-join-playback'); if (joinBtn) joinBtn.onclick = joinPlayback;
+
+  const playlistSelect = document.getElementById('cn-playlist-select');
+  if (playlistSelect) playlistSelect.onchange = () => switchPlaylist(playlistSelect.value);
+  const playlistNew = document.getElementById('cn-playlist-new');
+  if (playlistNew) playlistNew.onclick = () => { const name = window.prompt('Name for the new playlist:'); if (name) addPlaylist(name); };
+  const playlistDel = document.getElementById('cn-playlist-del');
+  if (playlistDel) playlistDel.onclick = () => {
+    const p = store.playlists.find((x) => x.id === store.activePlaylistId);
+    if (window.confirm('Delete "' + (p ? p.name : 'this playlist') + '" and all its tracks? This cannot be undone.')) removePlaylist(store.activePlaylistId);
+  };
 
   const hostToggle = document.getElementById('cn-host-toggle');
   if (hostToggle) hostToggle.onclick = () => (store.isHost ? stopHosting() : becomeHost());

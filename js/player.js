@@ -2,8 +2,8 @@
 // position persistence, and the audio-element event wiring.
 import { store, audio, DEVICE_ID } from './store.js';
 import { showError, urlHost, guessTitle } from './util.js';
-import { createTrack, deleteTrack, savePlayerState, updateTrackDuration } from './supabase.js';
-import { broadcastPresence } from './presence.js';
+import { createTrack, deleteTrack, savePlayerState, updateTrackDuration, fetchTracks, fetchPlayerState, createPlaylist, deletePlaylist } from './supabase.js';
+import { broadcastPresence, stopFollowing } from './presence.js';
 import { render } from './render.js';
 import { initMediaSession, updateMetadata, updatePlaybackState, updatePositionState } from './mediaSession.js';
 import { startWaveform } from './waveform.js';
@@ -100,6 +100,55 @@ export async function playFromHistory(id) {
   if (idx !== -1) { loadTrack(idx, true); persistPosition(true); broadcastPresence(true); return; }
   const h = store.history.find((x) => x.id === id);
   if (h && h.url) addTrack(h.url);
+}
+
+// --- Playlists (multiple named queues) ---------------------------------------
+// Load a playlist's queue + saved position into local state. Shared by init and
+// switchPlaylist so both paths behave identically.
+export async function loadPlaylistQueue(restore) {
+  audio.pause(); audio.src = ''; store.isPlaying = false;
+  store.currentIndex = -1; store.currentTime = 0; store.duration = 0;
+  store.shuffleHistory = [];
+  store.queue = await fetchTracks();
+  render();
+  if (restore) {
+    const remote = await fetchPlayerState();
+    if (remote && remote.current_track_id) {
+      const idx = store.queue.findIndex((t) => t.id === remote.current_track_id);
+      if (idx !== -1) loadTrack(idx, false, remote.position_seconds || 0);
+    }
+  }
+  render();
+}
+
+// Switch the active playlist: stop following (queues differ), persist the choice
+// per-device, then load the new queue. Realtime subscriptions are playlist-aware
+// (they filter on store.activePlaylistId) so no re-subscription is needed.
+export async function switchPlaylist(id) {
+  if (id === store.activePlaylistId) return;
+  if (store.followingId) stopFollowing();
+  store.activePlaylistId = id;
+  try { localStorage.setItem('santoor:playlist', id); } catch (e) {}
+  await loadPlaylistQueue(true);
+  broadcastPresence(true);
+}
+
+export async function addPlaylist(name) {
+  const clean = (name || '').trim();
+  if (!clean) { showError('Give the playlist a name.'); return; }
+  if (!store.dbReady) { showError('Database not configured.'); return; }
+  const row = await createPlaylist(clean);
+  if (!row) return;
+  if (!store.playlists.some((p) => p.id === row.id)) store.playlists.push(row);
+  switchPlaylist(row.id); // jump into the new (empty) playlist
+}
+
+export async function removePlaylist(id) {
+  const ok = await deletePlaylist(id);
+  if (!ok) return;
+  store.playlists = store.playlists.filter((p) => p.id !== id);
+  if (store.activePlaylistId === id) switchPlaylist(store.playlists[0] ? store.playlists[0].id : store.activePlaylistId);
+  else render();
 }
 
 export function loadTrack(index, autoplay, seekTo) {

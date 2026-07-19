@@ -59,7 +59,11 @@ html, body {
 .cn-offline-banner { background: #2A2831; border: 1px solid var(--line); border-radius: 10px; padding: 10px 14px; margin-bottom: 20px; font-family: var(--font-mono); font-size: 11px; color: var(--text-dim); }
 
 .cn-input-row { display: flex; gap: 8px; margin-bottom: 24px; }
-.cn-input { flex: 1; background: var(--bg-raised); border: 1px solid var(--line); border-radius: 8px; padding: 11px 13px; color: var(--text); font-family: var(--font-mono); font-size: 13px; outline: none; min-width: 0; }
+
+.cn-playlist-row { display: flex; align-items: center; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
+.cn-playlist-label { font-family: var(--font-mono); font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-dim); }
+.cn-playlist-select { flex: 1; min-width: 120px; background: var(--bg-raised); border: 1px solid var(--line); border-radius: 8px; padding: 9px 11px; color: var(--text); font-family: var(--font-body); font-size: 13px; outline: none; cursor: pointer; }
+.cn-playlist-select:focus { border-color: var(--teal); }.cn-input { flex: 1; background: var(--bg-raised); border: 1px solid var(--line); border-radius: 8px; padding: 11px 13px; color: var(--text); font-family: var(--font-mono); font-size: 13px; outline: none; min-width: 0; }
 .cn-input::placeholder { color: var(--text-dim); }
 .cn-input:focus { border-color: var(--teal); }
 .cn-add-btn { background: var(--gold); color: #17161B; border: none; border-radius: 8px; padding: 0 18px; font-family: var(--font-body); font-weight: 600; font-size: 13px; cursor: pointer; }

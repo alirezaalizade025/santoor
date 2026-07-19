@@ -1,6 +1,6 @@
 // All Supabase access: client init, track CRUD (Create/Read/Delete — no
 // Update by design), and the continuously-updated player_state row.
-import { store, DEVICE_ID } from './store.js';
+import { store, DEVICE_ID, DEFAULT_PLAYLIST_ID } from './store.js';
 import { showError } from './util.js';
 
 // Retry a Supabase call a few times with exponential backoff before giving up.
@@ -36,16 +36,50 @@ export function initSupabase() {
 }
 
 export async function fetchTracks() {
-  const { data, error } = await store.db.from('tracks').select('*').order('created_at', { ascending: true });
+  const { data, error } = await store.db.from('tracks')
+    .select('*')
+    .eq('playlist_id', store.activePlaylistId)
+    .order('created_at', { ascending: true });
   if (error) { console.error('fetchTracks error', error); showError('Could not load your tracks from the database.'); return []; }
   return data;
 }
 
-export async function createTrack(url, title, host) {
-  const { data, error } = await withRetry('createTrack',
-    () => store.db.from('tracks').insert({ url, title, host }).select().single());
-  if (error) { showError('Could not save that track — check your Supabase setup or connection.'); return null; }
+// Fetch all playlists. Falls back gracefully if the playlists table isn't set
+// up yet (older Supabase project) so the app still works on the Default queue.
+export async function fetchPlaylists() {
+  const { data, error } = await store.db.from('playlists').select('*').order('created_at', { ascending: true });
+  if (error) {
+    console.warn('fetchPlaylists unavailable — run the latest supabase-setup.sql', error.message || error);
+    store.playlistsSupported = false;
+    return [{ id: DEFAULT_PLAYLIST_ID, name: 'Default' }];
+  }
+  store.playlistsSupported = true;
+  if (!data.some((p) => p.id === DEFAULT_PLAYLIST_ID)) data.unshift({ id: DEFAULT_PLAYLIST_ID, name: 'Default' });
   return data;
+}
+
+export async function createPlaylist(name) {
+  const { data, error } = await withRetry('createPlaylist',
+    () => store.db.from('playlists').insert({ name }).select().single());
+  if (error) { showError('Could not create that playlist.'); return null; }
+  return data;
+}
+
+export async function deletePlaylist(id) {
+  if (id === DEFAULT_PLAYLIST_ID) { showError('The Default playlist cannot be deleted.'); return false; }
+  const { error } = await withRetry('deletePlaylist',
+    () => store.db.from('playlists').delete().eq('id', id));
+  if (error) { showError('Could not delete that playlist.'); return false; }
+  return true;
+}
+
+export function createTrack(url, title, host) {
+  return withRetry('createTrack',
+    () => store.db.from('tracks').insert({ url, title, host, playlist_id: store.activePlaylistId }).select().single())
+    .then(({ data, error }) => {
+      if (error) { showError('Could not save that track — check your Supabase setup or connection.'); return null; }
+      return data;
+    });
 }
 
 export async function deleteTrack(id) {
@@ -67,21 +101,25 @@ export async function updateTrackDuration(id, seconds) {
 }
 
 export async function fetchPlayerState() {
-  const { data, error } = await store.db.from('player_state').select('*').eq('id', 1).single();
+  const { data, error } = await store.db.from('player_state').select('*').eq('playlist_id', store.activePlaylistId).single();
   if (error) { console.error('fetchPlayerState error', error); return null; }
   return data;
 }
 
 export async function savePlayerState(partial) {
-  const payload = Object.assign({ id: 1, updated_by: DEVICE_ID, updated_at: new Date().toISOString() }, partial);
+  const payload = Object.assign(
+    { playlist_id: store.activePlaylistId, updated_by: DEVICE_ID, updated_at: new Date().toISOString() },
+    partial
+  );
+  // Upsert so a playlist that has no state row yet (freshly created) still saves.
   await withRetry('savePlayerState',
-    () => store.db.from('player_state').update(payload).eq('id', 1));
+    () => store.db.from('player_state').upsert(payload, { onConflict: 'playlist_id' }));
 }
 
 export function subscribeToPlayerState(onChange) {
   return store.db.channel('player_state_changes')
-    .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'player_state', filter: 'id=eq.1' }, (payload) => {
-      if (payload.new && payload.new.updated_by !== DEVICE_ID) onChange(payload.new);
+    .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'player_state' }, (payload) => {
+      if (payload.new && payload.new.playlist_id === store.activePlaylistId && payload.new.updated_by !== DEVICE_ID) onChange(payload.new);
     })
     .subscribe();
 }
@@ -94,9 +132,24 @@ export function subscribeToPlayerState(onChange) {
 export function subscribeToTracks(onInsert, onDelete) {
   return store.db.channel('tracks_changes')
     .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'tracks' }, (payload) => {
-      if (payload.new) onInsert(payload.new);
+      // Only surface inserts for the playlist currently being viewed.
+      if (payload.new && (payload.new.playlist_id || DEFAULT_PLAYLIST_ID) === store.activePlaylistId) onInsert(payload.new);
     })
     .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'tracks' }, (payload) => {
+      // DELETE payloads only include the primary key by default, so we can't
+      // filter by playlist here — app.js ignores ids not in the current queue.
+      if (payload.old && payload.old.id) onDelete(payload.old.id);
+    })
+    .subscribe();
+}
+
+// Realtime playlist create/delete so the switcher stays live across devices.
+export function subscribeToPlaylists(onInsert, onDelete) {
+  return store.db.channel('playlists_changes')
+    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'playlists' }, (payload) => {
+      if (payload.new) onInsert(payload.new);
+    })
+    .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'playlists' }, (payload) => {
       if (payload.old && payload.old.id) onDelete(payload.old.id);
     })
     .subscribe();
