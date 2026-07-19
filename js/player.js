@@ -2,7 +2,7 @@
 // position persistence, and the audio-element event wiring.
 import { store, audio, DEVICE_ID } from './store.js';
 import { showError, urlHost, guessTitle } from './util.js';
-import { createTrack, deleteTrack, savePlayerState } from './supabase.js';
+import { createTrack, deleteTrack, savePlayerState, updateTrackDuration } from './supabase.js';
 import { broadcastPresence } from './presence.js';
 import { render } from './render.js';
 import { initMediaSession, updateMetadata, updatePlaybackState, updatePositionState } from './mediaSession.js';
@@ -261,6 +261,13 @@ export function attachAudioListeners() {
   }, 5000);
   audio.addEventListener('loadedmetadata', () => {
     store.duration = audio.duration;
+    // Backfill the real duration to the tracks table once (only if not already
+    // stored) so the queue can show lengths without loading every track.
+    const track = store.currentIndex !== -1 ? store.queue[store.currentIndex] : null;
+    if (track && isFinite(audio.duration) && audio.duration > 0 && !track.duration_seconds) {
+      track.duration_seconds = audio.duration;
+      updateTrackDuration(track.id, audio.duration);
+    }
     if (store.pendingSeek != null) { try { audio.currentTime = store.pendingSeek; } catch (e) {} store.pendingSeek = null; }
     if (!store.followingId) broadcastPresence(true);
     render();

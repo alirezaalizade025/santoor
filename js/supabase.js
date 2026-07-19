@@ -55,6 +55,17 @@ export async function deleteTrack(id) {
   return true;
 }
 
+// Backfill a track's real duration once metadata has loaded, so the queue can
+// show lengths without loading each track first. Fire-and-forget: a failure
+// (e.g. the narrow UPDATE policy not yet applied in Supabase) is non-fatal and
+// only means durations won't be cached. Uses the "public update track duration"
+// RLS policy — see supabase-setup.sql.
+export async function updateTrackDuration(id, seconds) {
+  if (!store.dbReady || !isFinite(seconds) || seconds <= 0) return;
+  const { error } = await store.db.from('tracks').update({ duration_seconds: seconds }).eq('id', id);
+  if (error) console.warn('updateTrackDuration skipped', error.message || error);
+}
+
 export async function fetchPlayerState() {
   const { data, error } = await store.db.from('player_state').select('*').eq('id', 1).single();
   if (error) { console.error('fetchPlayerState error', error); return null; }

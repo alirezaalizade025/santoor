@@ -167,6 +167,7 @@ export function render() {
           <div class="cn-queue-item ${i === store.currentIndex ? 'active' : ''}" data-idx="${i}">
             <span class="cn-queue-idx">${(i + 1).toString().padStart(2, '0')}</span>
             <span class="cn-queue-title">${escapeHtml(t.title || 'Untitled track')}</span>
+            ${t.duration_seconds ? `<span class="cn-queue-dur">${fmtTime(t.duration_seconds)}</span>` : ''}
             <button class="cn-queue-remove" data-remove="${t.id}" title="Remove" aria-label="Remove ${escapeHtml(t.title || 'track')} from queue">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M18.3 5.71L12 12.01l-6.3-6.3-1.41 1.42 6.3 6.29-6.3 6.3 1.41 1.41 6.3-6.3 6.3 6.3 1.41-1.41-6.3-6.3 6.3-6.29z"/></svg>
             </button>

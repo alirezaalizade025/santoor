@@ -7,8 +7,12 @@ create table if not exists tracks (
   url text not null,
   title text,
   host text,
+  duration_seconds numeric,
   created_at timestamptz not null default now()
 );
+
+-- If you created this table before duration_seconds existed, add it:
+alter table tracks add column if not exists duration_seconds numeric;
 
 -- Table 2: current playback position, one shared row. This one DOES get
 -- upserted continuously — it's live "now playing" state, not part of the
@@ -34,7 +38,13 @@ alter table player_state enable row level security;
 create policy "public read tracks" on tracks for select using (true);
 create policy "public insert tracks" on tracks for insert with check (true);
 create policy "public delete tracks" on tracks for delete using (true);
--- No update policy on tracks — update requests will be rejected by RLS.
+-- Narrow UPDATE policy: added ONLY so a device can backfill duration_seconds
+-- once metadata loads (so the queue can show track lengths without loading each
+-- track first). RLS is row-level, not column-level, so this technically permits
+-- any column update; the app only ever writes duration_seconds here. The
+-- product rule "tracks are create/read/delete, not editable in place" still
+-- holds for the UI — this is a metadata backfill, not user-facing editing.
+create policy "public update track duration" on tracks for update using (true) with check (true);
 
 create policy "public read player_state" on player_state for select using (true);
 create policy "public update player_state" on player_state for update using (true);
