@@ -36,6 +36,14 @@ export function render() {
   }).join('');
 
   const syncLabel = store.dbReady ? 'Synced via database' : 'Database not configured';
+  const socketLabel = !store.dbReady
+    ? 'Realtime off'
+    : !store.isOnline
+      ? 'Offline'
+      : store.connectionHealthy
+        ? 'Live'
+        : 'Reconnecting…';
+  const socketClass = !store.dbReady || !store.isOnline || !store.connectionHealthy ? 'off' : 'live';
   const followingPeer = store.followingId ? store.onlineUsers.find((u) => u.id === store.followingId) : null;
   const followers = store.onlineUsers.filter((u) => u.following_id === DEVICE_ID);
   // Host mode: another peer advertising a session to join (we're not already in it).
@@ -45,7 +53,12 @@ export function render() {
     <div class="cn-wrap">
       <div class="cn-header">
         <h1 class="cn-title">Santoor<span class="dot">.</span></h1>
-        <div class="cn-sync-status"><span class="cn-pulse ${store.isPlaying && store.dbReady ? 'live' : 'off'}"></span>${syncLabel}</div>
+        <div class="cn-status-group">
+          <div class="cn-sync-status"><span class="cn-pulse ${store.isPlaying && store.dbReady ? 'live' : 'off'}"></span>${syncLabel}</div>
+          <div class="cn-socket-status" title="Realtime socket connection status">
+            <span class="cn-pulse ${socketClass}"></span>${socketLabel}
+          </div>
+        </div>
       </div>
 
       ${!store.dbReady ? `<div class="cn-offline-banner">Add your Supabase URL and anon key to supabase-config.js, then reload — see README.md for the 5-minute setup.</div>` : ''}

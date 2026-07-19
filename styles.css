@@ -33,9 +33,13 @@ html, body {
 .cn-wrap { max-width: 640px; margin: 0 auto; padding: max(20px, env(safe-area-inset-top)) 20px 60px; }
 
 .cn-header { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 24px; gap: 12px; flex-wrap: wrap; }
+.cn-status-group { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
 .cn-title { font-family: var(--font-display); font-size: 28px; font-weight: 600; letter-spacing: -0.01em; margin: 0; }
 .cn-title .dot { color: var(--gold); }
 .cn-sync-status { font-family: var(--font-mono); font-size: 11px; color: var(--text-dim); display: flex; align-items: center; gap: 6px; }
+.cn-socket-status { font-family: var(--font-mono); font-size: 11px; color: var(--text-dim); display: flex; align-items: center; gap: 6px; padding: 2px 8px; border: 1px solid var(--line); border-radius: 999px; background: var(--bg-raised); }
+.cn-socket-status .cn-pulse.off { background: #e0533d; }
+.cn-socket-status .cn-pulse.live { background: var(--teal); }
 .cn-pulse { width: 6px; height: 6px; border-radius: 50%; background: var(--teal); flex-shrink: 0; }
 .cn-pulse.live { animation: cn-pulse 1.6s ease-in-out infinite; }
 .cn-pulse.off { background: var(--text-dim); }
