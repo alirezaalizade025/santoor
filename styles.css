@@ -131,6 +131,9 @@ html, body {
 .cn-nickname-input { background: var(--bg-raised); border: 1px solid var(--line); border-radius: 6px; padding: 5px 9px; color: var(--text); font-family: var(--font-body); font-size: 12px; outline: none; width: 140px; text-align: right; }
 .cn-nickname-input:focus { border-color: var(--teal); }
 
+.cn-host-row { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; }
+.cn-host-count { font-family: var(--font-mono); font-size: 11px; color: var(--text-dim); }
+
 .cn-listeners { display: flex; flex-direction: column; gap: 6px; margin-bottom: 28px; }
 .cn-listener-item { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 8px; background: var(--bg-raised); border: 1px solid var(--line); }
 .cn-listener-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--teal); flex-shrink: 0; }

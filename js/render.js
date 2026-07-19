@@ -2,7 +2,7 @@
 import { store, DEVICE_ID } from './store.js';
 import { fmtTime, escapeHtml } from './util.js';
 import { togglePlay, toggleLoop, cycleRepeat, toggleShuffle, next, prev, seekTo, addTrack, removeTrack, applyRemote, loadTrack, persistPosition, joinPlayback, setVolume, playFromHistory, clearHistory } from './player.js';
-import { startFollowing, stopFollowing, broadcastPresence } from './presence.js';
+import { startFollowing, stopFollowing, broadcastPresence, becomeHost, stopHosting, joinHost } from './presence.js';
 import { saveNickname } from './identity.js';
 import { isWaveformActive } from './waveform.js';
 
@@ -30,6 +30,8 @@ export function render() {
   const syncLabel = store.dbReady ? 'Synced via database' : 'Database not configured';
   const followingPeer = store.followingId ? store.onlineUsers.find((u) => u.id === store.followingId) : null;
   const followers = store.onlineUsers.filter((u) => u.following_id === DEVICE_ID);
+  // Host mode: another peer advertising a session to join (we're not already in it).
+  const hostPeer = store.onlineUsers.find((u) => u.hosting && u.id !== store.followingId);
 
   root.innerHTML = `
     <div class="cn-wrap">
@@ -46,6 +48,23 @@ export function render() {
         <div class="cn-presence-row">
           <span class="cn-presence-count">🟢 ${store.onlineUsers.length + 1} listening now</span>
            <input class="cn-nickname-input" id="cn-nickname-input" value="${escapeHtml(nickVal)}" maxlength="24" title="Your display name" />
+        </div>
+        ${!store.followingId ? `
+          <div class="cn-host-row">
+            <button class="cn-btn-small ${store.isHost ? 'cn-btn-active' : ''}" id="cn-host-toggle" title="${store.isHost ? 'Stop hosting your session' : 'Host a session others can join — your controls drive everyone'}">
+              ${store.isHost ? 'Hosting — Stop' : 'Host a session'}
+            </button>
+            ${store.isHost && followers.length > 0 ? `<span class="cn-host-count">${followers.length} joined</span>` : ''}
+          </div>
+        ` : ''}
+      ` : ''}
+
+      ${hostPeer && !store.isHost ? `
+        <div class="cn-banner cn-followed-banner">
+          <div class="cn-banner-text">${escapeHtml(hostPeer.nickname || 'Someone')} is hosting a session</div>
+          <div class="cn-banner-actions">
+            <button class="cn-btn-small" id="cn-join-host" data-host="${hostPeer.id}">Join session</button>
+          </div>
         </div>
       ` : ''}
 
@@ -293,6 +312,11 @@ function attachHandlers() {
   });
   const stopBtn = document.getElementById('cn-stop-following'); if (stopBtn) stopBtn.onclick = stopFollowing;
   const joinBtn = document.getElementById('cn-join-playback'); if (joinBtn) joinBtn.onclick = joinPlayback;
+
+  const hostToggle = document.getElementById('cn-host-toggle');
+  if (hostToggle) hostToggle.onclick = () => (store.isHost ? stopHosting() : becomeHost());
+  const joinHostBtn = document.getElementById('cn-join-host');
+  if (joinHostBtn) joinHostBtn.onclick = () => joinHost(joinHostBtn.getAttribute('data-host'));
 
   const volume = document.getElementById('cn-volume');
   if (volume) volume.oninput = (e) => setVolume(parseFloat(e.target.value));

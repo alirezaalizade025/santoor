@@ -3,7 +3,7 @@
 // audio streams are cross-origin and always pass straight through to the
 // network — we never try to cache or intercept them.
 
-const CACHE_NAME = 'santoor-shell-v25';
+const CACHE_NAME = 'santoor-shell-v26';
 const SHELL_FILES = [
   './',
   './index.html',

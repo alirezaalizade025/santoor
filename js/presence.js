@@ -14,6 +14,7 @@ export function myPresencePayload() {
     position_seconds: store.currentTime,
     is_playing: store.isPlaying,
     following_id: store.followingId,
+    hosting: store.isHost,   // room-wide "join my session" flag for host mode
     updated_at: Date.now()
   };
 }
@@ -292,4 +293,28 @@ export function stopFollowing() {
   clearInterval(store.followDriftTimer);
   broadcastPresence(true);
   render();
+}
+
+// --- Host mode (one-to-many) --------------------------------------------------
+// A host advertises `hosting: true` room-wide; anyone can join (which is just
+// startFollowing(hostId)) and the host's controls then drive every joiner at
+// once. This reuses the existing leader-broadcasts / follower-mirrors machinery
+// — a host is simply a leader that announced itself so joiners get one clear
+// "Join session" button instead of per-peer follow buttons.
+export function becomeHost() {
+  if (store.followingId) stopFollowing(); // can't host while mirroring someone else
+  store.isHost = true;
+  broadcastPresence(true);
+  render();
+}
+
+export function stopHosting() {
+  store.isHost = false;
+  broadcastPresence(true);
+  render();
+}
+
+export function joinHost(hostId) {
+  if (store.isHost) stopHosting(); // stop advertising our own session when we join another
+  startFollowing(hostId);
 }

@@ -48,6 +48,7 @@ export const store = {
   peerLastSeen: {},        // id -> last ping/pong timestamp (ms), for real-time disconnect detection
   connectionHealthy: true, // our own Realtime socket state
   followingId: null,
+  isHost: false,           // when true, we advertise a room-wide "join my session" host
   followDriftTimer: null,
   presenceUpdateTimer: null,
   pingTimer: null,         // sends our heartbeat ping
