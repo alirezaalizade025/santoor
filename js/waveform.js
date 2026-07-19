@@ -1,8 +1,13 @@
 // Real audio-signal waveform via the Web Audio API's AnalyserNode.
 //
 // Two hard constraints shape this module:
-//   1. AudioContext can only start after a user gesture (autoplay policy), so we
-//      create it lazily on the first play and resume() it from a gesture.
+//   1. AudioContext can only start after a user gesture (autoplay policy), and
+//      — critically — once a <audio> element is fed through an AudioContext
+//      graph, the element's own output is REPLACED by that graph. If the
+//      context is left suspended, audio enters the graph and never reaches the
+//      speakers (UI shows "playing" but you hear nothing). So we MUST build and
+//      resume() the graph from inside a genuine user gesture (see player.js
+//      unlockAudioOnGesture), never from a programmatic play() callback.
 //   2. Cross-origin audio WITHOUT permissive CORS headers "taints" the media
 //      element: the AnalyserNode then reads all-zero samples (silence). Most
 //      pasted links fall in this bucket, so we detect an all-silent signal and
@@ -25,10 +30,12 @@ export function isWaveformActive() {
   return realSignalSeen;
 }
 
-// Wire the analyser once. MediaElementSource can only be created ONCE per media
-// element for the element's lifetime, so guard against re-creating it.
-function ensureGraph() {
-  if (ctx) return true;
+// Build the analyser graph AND resume the AudioContext. This must be called
+// from a real user gesture so the context starts in the "running" state and
+// audio actually reaches ctx.destination. Guarded so the MediaElementSource is
+// created at most once per element (re-creating throws).
+export function initWaveformGraph() {
+  if (ctx) { if (ctx.state === 'suspended') ctx.resume().catch(() => {}); return true; }
   const AC = window.AudioContext || window.webkitAudioContext;
   if (!AC) return false;
   try {
@@ -37,23 +44,26 @@ function ensureGraph() {
     analyser = ctx.createAnalyser();
     analyser.fftSize = 128; // -> 64 frequency bins, close to the 40 rendered bars
     dataArray = new Uint8Array(analyser.frequencyBinCount);
-    // Keep audio audible: source -> analyser -> destination.
+    // Route element output through the analyser to the speakers. The context
+    // being running (resumed in a gesture) is what keeps sound audible.
     sourceNode.connect(analyser);
     analyser.connect(ctx.destination);
+    if (ctx.state === 'suspended') ctx.resume().catch(() => {});
     return true;
   } catch (e) {
     // createMediaElementSource can throw if already created or blocked; give up
     // gracefully and let render.js keep the decorative bars.
     console.warn('Waveform analyser unavailable', e && e.message);
-    ctx = null;
+    ctx = null; sourceNode = null; analyser = null;
     return false;
   }
 }
 
-// Called from a user gesture / play. Starts (or resumes) the analyser loop.
+// Called when playback begins. Starts the analyser RAF loop (graph is assumed
+// already built + resumed from a user gesture; if not, there's nothing to draw
+// yet and the decorative bars remain).
 export function startWaveform() {
-  if (!ensureGraph()) return;
-  if (ctx.state === 'suspended') ctx.resume().catch(() => {});
+  if (!analyser) return;
   if (rafId == null) loop();
 }
 

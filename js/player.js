@@ -6,20 +6,25 @@ import { createTrack, deleteTrack, savePlayerState, updateTrackDuration, fetchTr
 import { broadcastPresence, stopFollowing } from './presence.js';
 import { render } from './render.js';
 import { initMediaSession, updateMetadata, updatePlaybackState, updatePositionState } from './mediaSession.js';
-import { startWaveform } from './waveform.js';
+import { startWaveform, initWaveformGraph } from './waveform.js';
 
 // Tiny silent clip used only to grant the audio element sticky activation on
 // mobile (iOS/Android block programmatic play() outside a user gesture).
 const SILENT_AUDIO = 'data:audio/mp3;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU4LjI5LjEwMAAAAAAAAAAAAAAA//tQxAADB8AhSmxhIIEVCSiJrDCQBTQQ91lwogr8efOOR0RUEkR/hK1B0he7sHrIWpBG0/0M3IgJ7l/9iI/fo/1kh/uIR/+Mf/fo/1kh/uIR/+Mf/fo/1kh/uIR/+Mf/fo/1kh/uIR/+Mf/fo/1kh/uIR/+Mf/fo/1kh/uIR/+Mf/fo/1kh/uIR/+Mf/fo/1kh/uIR/+Mf/fo/1kh/uIR/+Mf/fo/1kh/uIR/+Mf/fo/1kh/uIR/+Mf/fo/1kh/uIR/+Mf/fo/1kh/uIR/+Mf/fo/1kh/uIR/+Mf/fo/1kh/uIR/+Mf/fo/1kh/uIR/+Mf/fo/1kh/uIR/+Mf/fo/1kh/uIR';
 
 // Run once on the first user gesture anywhere: play the silent clip (inside the
-// gesture) so later mirrored play() calls are allowed on mobile. Race-safe: only
-// restores the previous source if mirrorPeer hasn't already taken over.
+// gesture) so later mirrored play() calls are allowed on mobile. We also build
+// + resume the Web Audio graph here — this is the one place guaranteed to be a
+// real user gesture, so the AudioContext starts in the "running" state and the
+// AnalyserNode route still reaches the speakers. Creating the MediaElementSource
+// anywhere else (e.g. a programmatic play callback) can leave the context
+// suspended and silence all audio while the UI still shows "playing".
 let audioUnlocked = false;
 function unlockAudioOnGesture() {
   if (audioUnlocked) return;
   audioUnlocked = true;
   ['pointerdown', 'touchstart', 'click', 'keydown'].forEach((e) => window.removeEventListener(e, unlockAudioOnGesture));
+  initWaveformGraph();
   const prev = audio.src;
   const wasPlaying = !audio.paused;
   audio.muted = true;
