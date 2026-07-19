@@ -13,10 +13,11 @@
 3. Left sidebar → **SQL Editor → New query**. Paste in the entire contents
    of `supabase-setup.sql` from this folder, click **Run**.
 4. Left sidebar → **Database → Replication**. Enable **realtime** for
-   **both** the `player_state` and `tracks` tables:
+   the `player_state`, `tracks`, and `playlists` tables:
    - `player_state` — lets other devices see playback position live.
    - `tracks` — lets other devices see queue adds/removes live (also
      required so "Listen together" can find a just-added track).
+   - `playlists` — lets the playlist switcher update live across devices.
 5. Left sidebar → **Project Settings → API**. Copy the **Project URL**
    and the **anon public** key.
 6. Open `supabase-config.js` in this folder and paste them in:
@@ -59,6 +60,27 @@ Jekyll processing interferes with plain static sites.
   Supabase Realtime, so when you pause on your phone, your laptop sees it
   within about a second and offers to pick up from that exact spot.
 
+## Playlists, playback & queue features
+- **Playlists**: use the **Playlist** dropdown to switch between named
+  queues, **+ New** to create one, and **Delete** to remove a non-Default
+  one (and its tracks). Each playlist has its own queue and its own synced
+  playback position. The **Default** playlist always exists.
+- **Add tracks**: paste a URL and press Add. Duplicate URLs are rejected,
+  and the link is probed first — if it doesn't load as playable audio you
+  get a confirm prompt before it's added.
+- **Shuffle & repeat**: the shuffle button randomizes advance order
+  (without repeating a track until the cycle is exhausted); the repeat
+  button cycles off → repeat-all → repeat-one.
+- **Volume**: the slider under the transport controls is per-device and
+  saved locally — it does not sync to other listeners.
+- **Recently played**: an expandable list under the queue shows tracks you
+  played on this device; tap one to play it again (re-adding it if needed).
+- **Real waveform**: when the audio source allows cross-origin analysis,
+  the bars reflect the actual signal; otherwise they fall back to a
+  decorative animation.
+- **Track durations**: shown in the queue once known (cached to the
+  database so they appear without reloading each track).
+
 ## Now Playing view
 - Tap the mini-player (track art / title area) to open a full-screen
   **Now Playing** view. The top half is split into two large tap zones —
@@ -77,6 +99,10 @@ Jekyll processing interferes with plain static sites.
   button. Turning it on makes your player mirror theirs: same track, same
   position, same play/pause state. Your own controls lock while following
   (there's a "Stop" button in the banner to take back control).
+- **Host mode** (one-to-many): press **Host a session** to advertise your
+  playback room-wide; everyone else sees a **Join session** button, and
+  your controls then drive all joiners at once. It's the same sync
+  mechanism as pairwise following, just with a single clear join button.
 - Position sync accounts for network delay and re-corrects every few
   seconds if it drifts — this is "closely synced," not frame-perfect.
   Browser autoplay restrictions mean the very first mirrored `play` may
@@ -86,12 +112,17 @@ Jekyll processing interferes with plain static sites.
   Realtime, not in Postgres.
 
 ## Known limitations
-- **No user accounts yet** — this setup is single-shared-queue, meant for
-  one person across their own devices. Anyone with your deployed URL can
-  see and modify the queue too, since there's no login. If you want private
-  accounts later, we can add Supabase Auth on top of this same schema.
+- **No user accounts yet** — playlists are public and shared; anyone with
+  your deployed URL can see, edit, and delete any playlist, since there's
+  no login. The schema is already playlist-based, so adding Supabase Auth
+  (private per-user playlists) later is an additive change.
+- **Cross-playlist listen-together** — if you follow someone who's on a
+  different playlist, you'll see "Waiting for a track to sync…" until that
+  track exists in your active playlist.
 - **CORS**: some hosts block cross-origin audio loading. Direct links to
   `.mp3`/`.m4a`/etc. usually work; some streaming platforms will refuse to
-  play regardless — that's a source restriction, not a bug here.
+  play regardless — that's a source restriction, not a bug here. The real
+  waveform also needs CORS-permissive audio; otherwise it falls back to a
+  decorative animation.
 - **Offline**: the app shell opens without internet; actual audio playback
-  and adding/removing tracks still need a connection.
+  and adding/removing tracks or playlists still need a connection.
