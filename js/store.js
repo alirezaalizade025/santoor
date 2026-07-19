@@ -59,7 +59,10 @@ export const store = {
   errorMsg: '',
   isOnline: navigator.onLine,
   loading: true,
-  loop: false,
+  loop: false,            // legacy alias kept in sync with repeatMode === 'all'
+  repeatMode: 'off',      // 'off' | 'all' | 'one'
+  shuffle: false,         // when true, next()/auto-advance pick a random unplayed track
+  shuffleHistory: [],     // queue indices already played this shuffle cycle
   nickname: '',
   nowPlayingOpen: false, // full-screen Now Playing view visibility
   addingTrack: false,    // true while a pasted URL is being probed before insert

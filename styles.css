@@ -94,6 +94,8 @@ html, body {
 .cn-ctrl-btn:disabled { opacity: 0.25; cursor: not-allowed; }
 .cn-play-btn { background: var(--gold); color: #17161B; border-radius: 50%; width: 46px; height: 46px; }
 .cn-loop-active { color: var(--gold); }
+.cn-repeat-one { position: relative; }
+.cn-repeat-one::after { content: '1'; position: absolute; top: 2px; right: 2px; font-family: var(--font-mono); font-size: 8px; font-weight: 700; color: var(--gold); background: var(--bg-raised); border-radius: 50%; width: 11px; height: 11px; line-height: 11px; text-align: center; }
 .cn-play-btn:hover { opacity: 0.9; }
 
 .cn-volume-row { display: flex; align-items: center; gap: 10px; margin-top: 18px; }

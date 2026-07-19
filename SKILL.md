@@ -40,9 +40,13 @@ another's playback live.
 
 ## Data model
 - **`tracks`** — `id uuid`, `url text`, `title text`, `host text`,
-  `created_at timestamptz`. Optional `duration_seconds numeric` may be
-  present (persisted after metadata loads). One shared queue.
-  RLS: public select/insert/delete. **No UPDATE policy by design.**
+  `duration_seconds numeric` (backfilled after metadata loads),
+  `created_at timestamptz`. One shared queue.
+  RLS: public select/insert/delete, plus a **narrow public UPDATE policy
+  used ONLY to backfill `duration_seconds`** (RLS is row-level so it
+  technically allows any column, but the app writes only that field). The
+  UI still never edits tracks in place — this is metadata caching, not
+  user-facing editing.
 - **`player_state`** — single row (`id = 1`): `current_track_id`,
   `position_seconds`, `is_playing`, `updated_by`, `updated_at`. Upserted
   continuously. RLS: public select/update.
@@ -59,9 +63,10 @@ another's playback live.
    The leader broadcasts room-wide; followers mirror via `mirrorPeer`.
 
 ## Conventions to preserve
-- `tracks` table: Create/Read/Delete only — do not add an Update policy or
-  update UI for existing tracks unless explicitly asked; this was a
-  deliberate product decision.
+- `tracks` table: create/read/delete for user actions — do not add
+  in-place track editing UI. The only UPDATE ever performed is the
+  automatic `duration_seconds` backfill (see data model); keep it that
+  way unless explicitly asked to add editing.
 - No localStorage/sessionStorage inside any Claude-artifact-rendered
   version of this app if one is ever built in Claude — only in this
   standalone deployed version, where it's fine.

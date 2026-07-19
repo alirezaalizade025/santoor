@@ -76,6 +76,8 @@ function broadcastPlay() {
 export function loadTrack(index, autoplay, seekTo) {
   if (index < 0 || index >= store.queue.length) return;
   store.currentIndex = index;
+  // Track shuffle history so a shuffle cycle doesn't repeat until exhausted.
+  if (store.shuffle && !store.shuffleHistory.includes(index)) store.shuffleHistory.push(index);
   const track = store.queue[index];
   store.pendingSeek = seekTo || 0;
   audio.src = track.url;
@@ -173,7 +175,46 @@ export function togglePlay() {
   else { audio.play().then(() => { store.isPlaying = true; persistPosition(true); broadcastPresence(true); broadcastPlay(); render(); }).catch(() => showError('Playback failed.')); }
 }
 
-export function toggleLoop() { if (store.followingId) return; store.loop = !store.loop; render(); }
+export function toggleLoop() { cycleRepeat(); } // legacy name kept for callers
+
+// Cycle repeat: off -> all -> one -> off. 'all' loops the whole queue; 'one'
+// repeats the current track. Keeps store.loop in sync for any legacy reads.
+export function cycleRepeat() {
+  if (store.followingId) return;
+  store.repeatMode = store.repeatMode === 'off' ? 'all' : store.repeatMode === 'all' ? 'one' : 'off';
+  store.loop = store.repeatMode === 'all';
+  render();
+}
+
+// Shuffle picks a random not-recently-played track when advancing. Toggling it
+// resets the per-cycle history so the current track anchors the new cycle.
+export function toggleShuffle() {
+  if (store.followingId) return;
+  store.shuffle = !store.shuffle;
+  store.shuffleHistory = store.currentIndex !== -1 ? [store.currentIndex] : [];
+  render();
+}
+
+// Pick the next queue index honoring shuffle. Returns -1 if there's nothing to
+// advance to (non-shuffle at end of queue with repeat off).
+function pickNextIndex() {
+  const n = store.queue.length;
+  if (n === 0) return -1;
+  if (store.shuffle) {
+    if (n === 1) return store.repeatMode === 'off' ? -1 : 0;
+    // Exclude already-played indices this cycle; reset when all are exhausted.
+    let pool = [];
+    for (let i = 0; i < n; i++) if (!store.shuffleHistory.includes(i)) pool.push(i);
+    if (pool.length === 0) {
+      if (store.repeatMode === 'off') return -1;
+      store.shuffleHistory = store.currentIndex !== -1 ? [store.currentIndex] : [];
+      for (let i = 0; i < n; i++) if (!store.shuffleHistory.includes(i)) pool.push(i);
+    }
+    return pool[Math.floor(Math.random() * pool.length)];
+  }
+  if (store.currentIndex < n - 1) return store.currentIndex + 1;
+  return store.repeatMode === 'off' ? -1 : 0; // wrap only when repeating
+}
 
 // Per-device volume (0..1). A local preference, NOT synced across Listen
 // together (unlike position/play-state), and persisted to localStorage.
@@ -192,11 +233,15 @@ export function joinPlayback() {
   audio.play().then(() => { store.isPlaying = true; render(); }).catch(() => { store.autoplayBlocked = true; render(); });
 }export function next() {
   if (store.followingId) return;
-  if (store.currentIndex < store.queue.length - 1) { loadTrack(store.currentIndex + 1, true); persistPosition(true); broadcastPresence(true); }
+  const idx = pickNextIndex();
+  if (idx !== -1) { loadTrack(idx, true); persistPosition(true); broadcastPresence(true); }
 }
 
 export function prev() {
   if (store.followingId) return;
+  // Restart current track if we're more than 3s in (common player convention);
+  // otherwise step back. Shuffle prev just steps to the previous queue index.
+  if (store.currentTime > 3 && store.currentIndex !== -1) { seekTo(0); return; }
   if (store.currentIndex > 0) { loadTrack(store.currentIndex - 1, true); persistPosition(true); broadcastPresence(true); }
 }
 
@@ -274,8 +319,11 @@ export function attachAudioListeners() {
   });
   audio.addEventListener('ended', () => {
     if (store.followingId) return;
-    if (store.currentIndex < store.queue.length - 1) { next(); }
-    else if (store.loop && store.queue.length > 0) { loadTrack(0, true); persistPosition(true); broadcastPresence(true); }
+    if (store.repeatMode === 'one' && store.currentIndex !== -1) {
+      loadTrack(store.currentIndex, true, 0); persistPosition(true); broadcastPresence(true); return;
+    }
+    const idx = pickNextIndex();
+    if (idx !== -1) { loadTrack(idx, true); persistPosition(true); broadcastPresence(true); }
     else { store.isPlaying = false; persistPosition(true); render(); }
   });
   audio.addEventListener('error', () => {

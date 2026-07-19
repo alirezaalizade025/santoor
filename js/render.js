@@ -1,7 +1,7 @@
 // View layer: builds the entire UI into #santoor-root and wires DOM events.
 import { store, DEVICE_ID } from './store.js';
 import { fmtTime, escapeHtml } from './util.js';
-import { togglePlay, toggleLoop, next, prev, seekTo, addTrack, removeTrack, applyRemote, loadTrack, persistPosition, joinPlayback, setVolume } from './player.js';
+import { togglePlay, toggleLoop, cycleRepeat, toggleShuffle, next, prev, seekTo, addTrack, removeTrack, applyRemote, loadTrack, persistPosition, joinPlayback, setVolume } from './player.js';
 import { startFollowing, stopFollowing, broadcastPresence } from './presence.js';
 import { saveNickname } from './identity.js';
 
@@ -113,7 +113,10 @@ export function render() {
         </div>
 
         <div class="cn-controls">
-          <button class="cn-ctrl-btn" id="cn-prev" ${store.currentIndex <= 0 || store.followingId ? 'disabled' : ''} title="Previous" aria-label="Previous track">
+          <button class="cn-ctrl-btn ${store.shuffle ? 'cn-loop-active' : ''}" id="cn-shuffle" ${store.followingId ? 'disabled' : ''} title="Shuffle" aria-label="Shuffle" aria-pressed="${store.shuffle ? 'true' : 'false'}">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M10.6 8.6L6.4 4.4 5 5.8l4.2 4.2 1.4-1.4zM14.5 5l1.9 1.9L4 19.3 5.4 20.7 17.8 8.3 19.7 10.2V5h-5.2zM13.4 15.4l-1.4 1.4 2.9 2.9H14.5v0h5.2v-5.2l-1.9 1.9-4.4-4.4z"/></svg>
+          </button>
+          <button class="cn-ctrl-btn" id="cn-prev" ${store.currentIndex <= 0 && store.currentTime <= 3 || store.followingId ? 'disabled' : ''} title="Previous" aria-label="Previous track">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M6 6h2v12H6zm3.5 6l8.5 6V6z"/></svg>
           </button>
           <button class="cn-ctrl-btn cn-play-btn" id="cn-play" ${store.currentIndex === -1 || store.followingId ? 'disabled' : ''} title="Play/Pause" aria-label="${store.isPlaying ? 'Pause' : 'Play'}">
@@ -121,11 +124,11 @@ export function render() {
               ? `<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="6" y="5" width="4" height="14"/><rect x="14" y="5" width="4" height="14"/></svg>`
               : `<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>`}
           </button>
-          <button class="cn-ctrl-btn" id="cn-next" ${store.currentIndex === -1 || store.currentIndex >= store.queue.length - 1 || store.followingId ? 'disabled' : ''} title="Next" aria-label="Next track">
+          <button class="cn-ctrl-btn" id="cn-next" ${store.currentIndex === -1 || store.followingId ? 'disabled' : ''} title="Next" aria-label="Next track">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M16 6h2v12h-2zM6 6l8.5 6L6 18z"/></svg>
           </button>
-          <button class="cn-ctrl-btn ${store.loop ? 'cn-loop-active' : ''}" id="cn-loop" ${store.followingId ? 'disabled' : ''} title="Loop queue" aria-label="Loop queue" aria-pressed="${store.loop ? 'true' : 'false'}">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M7 7h10v3l4-4-4-4v3H5v6h2V7zm10 10H7v-3l-4 4 4 4v-3h12v-6h-2v4z"/></svg>
+          <button class="cn-ctrl-btn ${store.repeatMode !== 'off' ? 'cn-loop-active' : ''} ${store.repeatMode === 'one' ? 'cn-repeat-one' : ''}" id="cn-repeat" ${store.followingId ? 'disabled' : ''} title="${store.repeatMode === 'one' ? 'Repeat one' : store.repeatMode === 'all' ? 'Repeat all' : 'Repeat off'}" aria-label="${store.repeatMode === 'one' ? 'Repeat one' : store.repeatMode === 'all' ? 'Repeat all' : 'Repeat off'}">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M7 7h10v3l4-4-4-4v3H5v6h2V7zm10 10H7v-3l-4 4 4 4v-3h12v-6h-2v4z"/></svg>
           </button>
         </div>
 
@@ -183,10 +186,10 @@ export function render() {
         </button>
 
         <div class="cn-np-tapzones">
-          <button class="cn-np-tap cn-np-tap-prev" id="cn-np-prev" ${store.currentIndex <= 0 || store.followingId ? 'disabled' : ''} aria-label="Previous track">
+          <button class="cn-np-tap cn-np-tap-prev" id="cn-np-prev" ${(store.currentIndex <= 0 && store.currentTime <= 3) || store.followingId ? 'disabled' : ''} aria-label="Previous track">
             <span class="cn-np-tap-hint"><svg width="28" height="28" viewBox="0 0 24 24" fill="currentColor"><path d="M6 6h2v12H6zm3.5 6l8.5 6V6z"/></svg><span>Previous</span></span>
           </button>
-          <button class="cn-np-tap cn-np-tap-next" id="cn-np-next" ${store.currentIndex === -1 || store.currentIndex >= store.queue.length - 1 || store.followingId ? 'disabled' : ''} aria-label="Next track">
+          <button class="cn-np-tap cn-np-tap-next" id="cn-np-next" ${store.currentIndex === -1 || store.followingId ? 'disabled' : ''} aria-label="Next track">
             <span class="cn-np-tap-hint"><svg width="28" height="28" viewBox="0 0 24 24" fill="currentColor"><path d="M16 6h2v12h-2zM6 6l8.5 6L6 18z"/></svg><span>Next</span></span>
           </button>
         </div>
@@ -226,7 +229,8 @@ function attachHandlers() {
   const playBtn = document.getElementById('cn-play'); if (playBtn) playBtn.onclick = togglePlay;
   const prevBtn = document.getElementById('cn-prev'); if (prevBtn) prevBtn.onclick = prev;
   const nextBtn = document.getElementById('cn-next'); if (nextBtn) nextBtn.onclick = next;
-  const loopBtn = document.getElementById('cn-loop'); if (loopBtn) loopBtn.onclick = toggleLoop;
+  const repeatBtn = document.getElementById('cn-repeat'); if (repeatBtn) repeatBtn.onclick = cycleRepeat;
+  const shuffleBtn = document.getElementById('cn-shuffle'); if (shuffleBtn) shuffleBtn.onclick = toggleShuffle;
 
   const progressTrack = document.getElementById('cn-progress-track');
   if (progressTrack) progressTrack.onclick = (e) => { const rect = progressTrack.getBoundingClientRect(); seekTo((e.clientX - rect.left) / rect.width); };
