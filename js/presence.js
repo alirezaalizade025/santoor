@@ -166,6 +166,17 @@ export function initPresence() {
       if (!payload || !payload.id) return;
       markPeerSeen(payload.id);
     })
+    // Host-mode announcement: a host broadcasts its hosting state via a regular
+    // broadcast (in addition to presence) because presence .track() updates can
+    // be dropped when the channel is flaky or rate-limited — the "Join session"
+    // button must surface reliably. Presence still carries it as a fallback.
+    .on('broadcast', { event: 'hosting' }, ({ payload }) => {
+      if (!payload || !payload.id) return;
+      markPeerSeen(payload.id);
+      const u = store.onlineUsers.find((x) => x.id === payload.id);
+      if (u) { u.hosting = !!payload.hosting; if (!payload.hosting && store.followingId === payload.id) stopFollowing(); render(); }
+      else { upsertPeer(Object.assign({ id: payload.id }, payload)); render(); }
+    })
     .subscribe(async (status) => {
       if (status === 'SUBSCRIBED') {
         store.connectionHealthy = true;
@@ -198,9 +209,10 @@ function startHeartbeat() {
   stopHeartbeat();
 
   // Broadcast our ping so peers know we're alive; also re-track presence so late
-  // joiners and reconnects converge on our current state.
+  // joiners and reconnects converge on our current state. Skip when the socket
+  // is down to avoid the noisy "falling back to REST API" spam during reconnects.
   store.pingTimer = setInterval(() => {
-    if (!store.presenceChannel) return;
+    if (!store.presenceChannel || !store.connectionHealthy) return;
     store.presenceChannel.send({ type: 'broadcast', event: 'ping', payload: { id: DEVICE_ID } });
     broadcastPresence(false);
   }, PING_INTERVAL);
@@ -305,12 +317,16 @@ export function becomeHost() {
   if (store.followingId) stopFollowing(); // can't host while mirroring someone else
   store.isHost = true;
   broadcastPresence(true);
+  // Immediate, non-throttled announcement so the "Join session" button appears
+  // on peers at once (presence .track() alone can lag or be dropped).
+  store.presenceChannel?.send({ type: 'broadcast', event: 'hosting', payload: { id: DEVICE_ID, hosting: true, nickname: store.nickname } });
   render();
 }
 
 export function stopHosting() {
   store.isHost = false;
   broadcastPresence(true);
+  store.presenceChannel?.send({ type: 'broadcast', event: 'hosting', payload: { id: DEVICE_ID, hosting: false, nickname: store.nickname } });
   render();
 }
 

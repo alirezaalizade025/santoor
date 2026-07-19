@@ -65,7 +65,9 @@ export function persistPosition(immediate) {
 // subject to the presence rate limit. Only the controller (not a follower)
 // broadcasts, to avoid echo loops.
 function broadcastPlay() {
-  if (store.followingId || !store.presenceChannel) return;
+  // Skip when socket is down — avoids the noisy "falling back to REST API"
+  // spam and pointless send attempts during a reconnect.
+  if (store.followingId || !store.presenceChannel || !store.connectionHealthy) return;
   const track = store.currentIndex !== -1 ? store.queue[store.currentIndex] : null;
   store.presenceChannel.send({
     type: 'broadcast',
