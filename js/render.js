@@ -113,16 +113,16 @@ export function render() {
         </div>
 
         <div class="cn-controls">
-          <button class="cn-ctrl-btn" id="cn-prev" ${store.currentIndex <= 0 || store.followingId ? 'disabled' : ''} title="Previous">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M6 6h2v12H6zm3.5 6l8.5 6V6z"/></svg>
+          <button class="cn-ctrl-btn" id="cn-prev" ${store.currentIndex <= 0 || store.followingId ? 'disabled' : ''} title="Previous" aria-label="Previous track">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M6 6h2v12H6zm3.5 6l8.5 6V6z"/></svg>
           </button>
-          <button class="cn-ctrl-btn cn-play-btn" id="cn-play" ${store.currentIndex === -1 || store.followingId ? 'disabled' : ''} title="Play/Pause">
+          <button class="cn-ctrl-btn cn-play-btn" id="cn-play" ${store.currentIndex === -1 || store.followingId ? 'disabled' : ''} title="Play/Pause" aria-label="${store.isPlaying ? 'Pause' : 'Play'}">
             ${store.isPlaying
-              ? `<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="5" width="4" height="14"/><rect x="14" y="5" width="4" height="14"/></svg>`
-              : `<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>`}
+              ? `<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="6" y="5" width="4" height="14"/><rect x="14" y="5" width="4" height="14"/></svg>`
+              : `<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>`}
           </button>
-          <button class="cn-ctrl-btn" id="cn-next" ${store.currentIndex === -1 || store.currentIndex >= store.queue.length - 1 || store.followingId ? 'disabled' : ''} title="Next">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M16 6h2v12h-2zM6 6l8.5 6L6 18z"/></svg>
+          <button class="cn-ctrl-btn" id="cn-next" ${store.currentIndex === -1 || store.currentIndex >= store.queue.length - 1 || store.followingId ? 'disabled' : ''} title="Next" aria-label="Next track">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M16 6h2v12h-2zM6 6l8.5 6L6 18z"/></svg>
           </button>
           <button class="cn-ctrl-btn ${store.loop ? 'cn-loop-active' : ''}" id="cn-loop" ${store.followingId ? 'disabled' : ''} title="Loop queue" aria-label="Loop queue" aria-pressed="${store.loop ? 'true' : 'false'}">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M7 7h10v3l4-4-4-4v3H5v6h2V7zm10 10H7v-3l-4 4 4 4v-3h12v-6h-2v4z"/></svg>
@@ -167,8 +167,8 @@ export function render() {
           <div class="cn-queue-item ${i === store.currentIndex ? 'active' : ''}" data-idx="${i}">
             <span class="cn-queue-idx">${(i + 1).toString().padStart(2, '0')}</span>
             <span class="cn-queue-title">${escapeHtml(t.title || 'Untitled track')}</span>
-            <button class="cn-queue-remove" data-remove="${t.id}" title="Remove">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M18.3 5.71L12 12.01l-6.3-6.3-1.41 1.42 6.3 6.29-6.3 6.3 1.41 1.41 6.3-6.3 6.3 6.3 1.41-1.41-6.3-6.3 6.3-6.29z"/></svg>
+            <button class="cn-queue-remove" data-remove="${t.id}" title="Remove" aria-label="Remove ${escapeHtml(t.title || 'track')} from queue">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M18.3 5.71L12 12.01l-6.3-6.3-1.41 1.42 6.3 6.29-6.3 6.3 1.41 1.41 6.3-6.3 6.3 6.3 1.41-1.41-6.3-6.3 6.3-6.29z"/></svg>
             </button>
           </div>
         `).join('')}
