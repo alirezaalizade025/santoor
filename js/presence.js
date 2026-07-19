@@ -5,15 +5,24 @@ import { store, audio, DEVICE_ID } from './store.js';
 import { render } from './render.js';
 import { loadTrack } from './player.js';
 
-// Send a channel broadcast. Newer @supabase/realtime-js deprecates plain
-// `channel.send()` when it auto-falls back to the REST API (which logs a noisy
-// warning every call). Prefer the explicit `httpSend()` for REST delivery so
-// the warning never fires; fall back to `send()` on older SDKs.
+// Send a channel broadcast. Prefer the websocket `send()` (no extra HTTP
+// requests, no deprecation warning) when the channel is actually subscribed.
+// Newer @supabase/realtime-js warns when `send()` auto-falls back to the REST
+// API during a disconnect, so only use the explicit `httpSend()` REST path when
+// the socket isn't connected. Fall back to plain `send()` on older SDKs.
 function channelSend(payload) {
   const ch = store.presenceChannel;
   if (!ch) return;
-  if (typeof ch.httpSend === 'function') ch.httpSend(payload);
-  else ch.send(payload);
+  const socketConnected = ch.socket && typeof ch.socket.isConnected === 'function'
+    ? ch.socket.isConnected()
+    : (ch.state === 'joined' || ch.state === 'CHANNEL_JOINED');
+  if (socketConnected) {
+    ch.send(payload);
+  } else if (typeof ch.httpSend === 'function') {
+    ch.httpSend(payload);
+  } else {
+    ch.send(payload);
+  }
 }
 
 export function myPresencePayload() {
@@ -57,8 +66,8 @@ export function broadcastPresence(immediate) {
 // every peer broadcasts a `ping`; receivers reply with a `pong`. We stamp each
 // peer's last-heard time and reap anyone who goes silent, so the "listening now"
 // list and follow feature react to drop-offs within a few seconds.
-const PING_INTERVAL = 4000;   // how often we broadcast our ping
-const PEER_TIMEOUT = 12000;   // peer is considered gone after this much silence
+const PING_INTERVAL = 15000;  // how often we broadcast our ping (over the ws socket)
+const PEER_TIMEOUT = 45000;   // peer is considered gone after this much silence
 
 // Record that we just heard from a peer (any ping/pong/presence message).
 function markPeerSeen(id) {
