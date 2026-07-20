@@ -45,6 +45,7 @@ audio.volume = initialVolume;
 export const store = {
   db: null,
   dbReady: false,
+  dbError: null,                           // 'missing-config' | 'lib-unavailable' | 'init-failed' | null
   playlists: [],                         // [{id,name,created_at}]
   activePlaylistId: loadActivePlaylist(), // which playlist's queue is shown
   playlistsSupported: true,              // false if the playlists table isn't set up yet

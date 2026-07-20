@@ -23,14 +23,47 @@ async function withRetry(label, fn, attempts = 3) {
   return { data: null, error: lastErr };
 }
 
-export function initSupabase() {
+// Wait until the Supabase client library (loaded from the CDN in index.html)
+// is available. If the classic CDN <script> is slow or momentarily blocked,
+// the module may run first; this resolves once `window.supabase` exists.
+function whenSupabaseLibReady() {
+  if (window.supabase) return Promise.resolve(true);
+  return new Promise((resolve) => {
+    const script = document.querySelector('script[src*="supabase"]');
+    if (script) {
+      script.addEventListener('load', () => resolve(!!window.supabase), { once: true });
+      script.addEventListener('error', () => resolve(false), { once: true });
+    }
+    // Fallback polling in case the script tag isn't found but the lib arrives.
+    let tries = 0;
+    const tick = () => {
+      if (window.supabase) return resolve(true);
+      if (++tries > 50) return resolve(false); // ~5s
+      setTimeout(tick, 100);
+    };
+    setTimeout(tick, 100);
+  });
+}
+
+export async function initSupabase() {
   const cfg = window.SUPABASE_CONFIG || {};
-  if (!cfg.url || !cfg.anonKey) return false;
+  if (!cfg.url || !cfg.anonKey) {
+    store.dbError = 'missing-config';
+    return false;
+  }
+  const libReady = await whenSupabaseLibReady();
+  if (!libReady) {
+    console.error('Supabase client library failed to load (CDN blocked or offline).');
+    store.dbError = 'lib-unavailable';
+    return false;
+  }
   try {
     store.db = window.supabase.createClient(cfg.url, cfg.anonKey);
+    store.dbError = null;
     return true;
   } catch (e) {
     console.error('Supabase init failed', e);
+    store.dbError = 'init-failed';
     return false;
   }
 }

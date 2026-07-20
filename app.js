@@ -53,8 +53,15 @@ function onPlaylistDeleted(id) {
 async function init() {
   store.nickname = loadNickname();
   render();
-  store.dbReady = initSupabase();
+  store.dbReady = await initSupabase();
   render();
+  // If the client lib was merely slow/late (not a config problem), retry once
+  // it finishes loading so we don't permanently show the setup banner.
+  if (!store.dbReady && store.dbError === 'lib-unavailable') {
+    await new Promise((r) => setTimeout(r, 600));
+    store.dbReady = await initSupabase();
+    render();
+  }
   if (!store.dbReady) { store.loading = false; render(); return; }
 
   store.playlists = await fetchPlaylists();
