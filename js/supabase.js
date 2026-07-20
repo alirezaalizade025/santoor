@@ -187,3 +187,84 @@ export function subscribeToPlaylists(onInsert, onDelete) {
     })
     .subscribe();
 }
+
+// ---------------------------------------------------------------------------
+// Castbox: search + resolve via Supabase Edge Functions (server-side proxy to
+// Podcast Index / RSS — keeps third-party keys out of the browser and dodges
+// CORS). The anon key is used as the bearer; the functions are public.
+// ---------------------------------------------------------------------------
+async function invokeCastbox(fn, body) {
+  if (!store.dbReady || !store.db) {
+    return { data: null, error: 'database not ready' };
+  }
+  try {
+    const { data, error } = await store.db.functions.invoke(fn, { body });
+    if (error) return { data: null, error };
+    return { data, error: null };
+  } catch (e) {
+    console.error('castbox invoke ' + fn + ' failed', e);
+    return { data: null, error: e };
+  }
+}
+
+export async function callCastboxSearch(q) {
+  const { data, error } = await invokeCastbox('castbox-search', { q });
+  if (error || !data) return { feeds: [] };
+  return data;
+}
+
+export async function callCastboxResolve(feed) {
+  const { data, error } = await invokeCastbox('castbox-resolve', { feed });
+  if (error || !data) return { meta: {}, episodes: [] };
+  return data;
+}
+
+// Selected Castbox channels (the Castbox tab's "previously selected" list).
+export async function fetchCastboxChannels() {
+  if (!store.dbReady || !store.db) return [];
+  const { data, error } = await store.db
+    .from('castbox_channels')
+    .select('*')
+    .order('created_at', { ascending: true });
+  if (error) {
+    console.warn('fetchCastboxChannels unavailable — run the latest supabase-setup.sql', error.message || error);
+    return [];
+  }
+  return data;
+}
+
+export async function saveCastboxChannel(meta) {
+  const { data, error } = await withRetry('saveCastboxChannel',
+    () => store.db.from('castbox_channels')
+      .insert({
+        castbox_id: meta.id || null,
+        title: meta.title,
+        author: meta.author || null,
+        rss_url: meta.feedUrl || meta.rss_url || null,
+        artwork_url: meta.artwork || meta.artwork_url || null,
+        description: meta.description || null,
+      })
+      .select()
+      .single());
+  if (error) { showError('Could not save that channel.'); return null; }
+  return data;
+}
+
+export async function deleteCastboxChannel(id) {
+  const { error } = await withRetry('deleteCastboxChannel',
+    () => store.db.from('castbox_channels').delete().eq('id', id));
+  if (error) { showError('Could not remove that channel.'); return false; }
+  return true;
+}
+
+// Realtime for selected channels so the Castbox tab stays live across devices.
+export function subscribeToCastboxChannels(onInsert, onDelete) {
+  return store.db.channel('castbox_channels_changes')
+    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'castbox_channels' }, (payload) => {
+      if (payload.new) onInsert(payload.new);
+    })
+    .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'castbox_channels' }, (payload) => {
+      if (payload.old && payload.old.id) onDelete(payload.old.id);
+    })
+    .subscribe();
+}
