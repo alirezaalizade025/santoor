@@ -375,7 +375,7 @@ function castboxView() {
 
   return `
     <div class="cn-input-row">
-      <input class="cn-input" id="cb-search" aria-label="Search Castbox" placeholder="Search podcasts…" value="${escapeHtml(cbVal)}" ${store.dbReady ? '' : 'disabled'} />
+      <input class="cn-input" id="cb-search" aria-label="Search Castbox" placeholder="Search podcasts…" value="${escapeHtml(store.castboxQuery)}" ${store.dbReady ? '' : 'disabled'} />
       <button class="cn-add-btn" id="cb-search-btn" ${store.dbReady ? '' : 'disabled'}>${store.castboxLoading ? '…' : 'Search'}</button>
     </div>
 
