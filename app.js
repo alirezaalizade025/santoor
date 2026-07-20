@@ -3,10 +3,11 @@
 // split into focused modules under ./js/ and imported here.
 import { store, audio, DEFAULT_PLAYLIST_ID } from './js/store.js';
 import { render } from './js/render.js';
-import { initSupabase, fetchPlaylists, subscribeToPlayerState, subscribeToTracks, subscribeToPlaylists } from './js/supabase.js';
+import { initSupabase, fetchPlaylists, subscribeToPlayerState, subscribeToTracks, subscribeToPlaylists, subscribeToCastboxChannels } from './js/supabase.js';
 import { initPresence } from './js/presence.js';
 import { loadTrack, attachAudioListeners, loadPlaylistQueue } from './js/player.js';
 import { loadNickname } from './js/identity.js';
+import { initCastbox, onCastboxChannelInserted, onCastboxChannelDeleted } from './js/castbox.js';
 
 // Realtime INSERT on `tracks`: append the new row locally (idempotent — the
 // device that added it already pushed it optimistically) and re-render.
@@ -76,6 +77,8 @@ async function init() {
   subscribeToPlayerState((remote) => { if (!store.followingId) { store.pendingRemote = remote; render(); } });
   subscribeToTracks(onTrackInserted, onTrackDeleted);
   subscribeToPlaylists(onPlaylistInserted, onPlaylistDeleted);
+  subscribeToCastboxChannels(onCastboxChannelInserted, onCastboxChannelDeleted);
+  await initCastbox();
   initPresence();
   attachAudioListeners();
 

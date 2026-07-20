@@ -5,6 +5,10 @@ import { togglePlay, toggleLoop, cycleRepeat, toggleShuffle, next, prev, seekTo,
 import { startFollowing, stopFollowing, broadcastPresence, becomeHost, stopHosting, joinHost } from './presence.js';
 import { saveNickname } from './identity.js';
 import { isWaveformActive } from './waveform.js';
+import {
+  switchTab, searchCastbox, addCastboxChannel, openCastboxChannel,
+  playCastboxEpisode, addCastboxEpisodeToQueue, removeCastboxChannel,
+} from './castbox.js';
 
 const root = document.getElementById('santoor-root');
 
@@ -34,6 +38,10 @@ export function render() {
   const urlVal = urlFocused ? urlEl.value : '';
   const selStart = urlFocused ? urlEl.selectionStart : null;
   const selEnd = urlFocused ? urlEl.selectionEnd : null;
+  // Preserve the Castbox search input's focus/value too (same reason as above).
+  const cbEl = document.getElementById('cb-search');
+  const cbFocused = cbEl && document.activeElement === cbEl;
+  const cbVal = cbFocused ? cbEl.value : store.castboxQuery;
   const progressPct = store.duration ? (store.currentTime / store.duration) * 100 : 0;
   // When the real-signal AnalyserNode is driving the waveform, render flat bars
   // that waveform.js animates directly (its RAF loop overwrites the heights). If
@@ -71,6 +79,11 @@ export function render() {
             <span class="cn-pulse ${socketClass}"></span>${socketLabel}
           </div>
         </div>
+      </div>
+
+      <div class="cn-tabbar">
+        <button class="cn-tab ${store.activeTab === 'player' ? 'active' : ''}" id="cn-tab-player" data-tab="player">Player</button>
+        <button class="cn-tab ${store.activeTab === 'castbox' ? 'active' : ''}" id="cn-tab-castbox" data-tab="castbox">Castbox</button>
       </div>
 
       ${!store.dbReady ? `<div class="cn-offline-banner">${dbNotReadyMessage()}</div>` : ''}
@@ -156,6 +169,7 @@ export function render() {
         </div>
       ` : ''}
 
+      ${store.activeTab === 'player' ? `
       <div class="cn-input-row">
         <input class="cn-input" id="cn-url-input" aria-label="Track URL" placeholder="Paste a track URL (https://...)" value="${escapeHtml(urlVal)}" ${store.dbReady && !store.addingTrack ? '' : 'disabled'} />
         <button class="cn-add-btn" id="cn-add-btn" ${store.dbReady && !store.addingTrack ? '' : 'disabled'}>${store.addingTrack ? 'Checking…' : 'Add'}</button>
@@ -268,6 +282,8 @@ export function render() {
           </div>
         ` : ''}
       ` : ''}
+
+      ${store.activeTab === 'castbox' ? castboxView() : ''}
     </div>
 
     ${store.nowPlayingOpen ? `
@@ -311,6 +327,69 @@ export function render() {
   attachHandlers(urlFocused, selStart, selEnd);
 }
 
+// Castbox tab: search box, results, and previously-selected channels with their
+// episodes. Playback is delegated to player.js via the handlers below.
+function castboxView() {
+  const results = store.castboxResults.map((r) => `
+    <div class="cn-queue-item cb-result">
+      ${r.artwork ? `<img class="cb-art" src="${escapeHtml(r.artwork)}" alt="" loading="lazy" />` : `<div class="cb-art cb-art-empty"></div>`}
+      <div class="cb-result-info">
+        <div class="cn-queue-title">${escapeHtml(r.title || 'Untitled channel')}</div>
+        <div class="cn-queue-dur">${escapeHtml(r.author || '')}</div>
+      </div>
+      <button class="cn-btn-small cb-add-channel" data-feed="${escapeHtml(r.feedUrl)}" data-title="${escapeHtml(r.title || '')}" data-author="${escapeHtml(r.author || '')}" data-art="${escapeHtml(r.artwork || '')}">Add</button>
+    </div>
+  `).join('');
+
+  const channels = store.castboxChannels.map((c) => {
+    const open = store.castboxOpenChannel === c.id;
+    const eps = store.castboxEpisodes[c.id] || [];
+    const episodesHtml = open ? `
+      <div class="cn-queue cn-history">
+        ${store.castboxLoading && !eps.length ? `<div class="cn-empty-queue">Loading episodes…</div>` :
+          eps.length ? eps.map((e, i) => `
+            <div class="cn-queue-item cb-episode">
+              <span class="cn-queue-idx">${(i + 1).toString().padStart(2, '0')}</span>
+              <span class="cn-queue-title">${escapeHtml(e.title || 'Untitled episode')}</span>
+              ${e.durationSeconds ? `<span class="cn-queue-dur">${fmtTime(e.durationSeconds)}</span>` : ''}
+              <button class="cn-btn-small cb-play-ep" data-ch="${c.id}" data-i="${i}">Play</button>
+              <button class="cn-btn-small cb-add-ep" data-ch="${c.id}" data-i="${i}">+ Queue</button>
+            </div>
+          `).join('') : `<div class="cn-empty-queue">No episodes found</div>`}
+      </div>` : '';
+    return `
+      <div class="cn-queue-item cb-channel ${open ? 'active' : ''}" data-ch-open="${c.id}" role="button" tabindex="0" title="Toggle episodes">
+        ${c.artwork_url ? `<img class="cb-art" src="${escapeHtml(c.artwork_url)}" alt="" loading="lazy" />` : `<div class="cb-art cb-art-empty"></div>`}
+        <div class="cb-result-info">
+          <div class="cn-queue-title">${escapeHtml(c.title || 'Untitled channel')}</div>
+          <div class="cn-queue-dur">${escapeHtml(c.author || '')}</div>
+        </div>
+        <button class="cn-queue-remove cb-del-channel" data-del-ch="${c.id}" title="Remove channel" aria-label="Remove channel">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M18.3 5.71L12 12.01l-6.3-6.3-1.41 1.42 6.3 6.29-6.3 6.3 1.41 1.41 6.3-6.3 6.3 6.3 1.41-1.41-6.3-6.3 6.3-6.29z"/></svg>
+        </button>
+      </div>
+      ${episodesHtml}
+    `;
+  }).join('');
+
+  return `
+    <div class="cn-input-row">
+      <input class="cn-input" id="cb-search" aria-label="Search Castbox" placeholder="Search podcasts…" value="${escapeHtml(cbVal)}" ${store.dbReady ? '' : 'disabled'} />
+      <button class="cn-add-btn" id="cb-search-btn" ${store.dbReady ? '' : 'disabled'}>${store.castboxLoading ? '…' : 'Search'}</button>
+    </div>
+
+    ${store.castboxResults.length > 0 ? `
+      <div class="cn-section-label">Search results</div>
+      <div class="cn-queue">${results}</div>
+    ` : ''}
+
+    <div class="cn-section-label">Selected channels — ${store.castboxChannels.length}</div>
+    ${store.castboxChannels.length === 0
+      ? `<div class="cn-empty-queue">${store.loading ? 'Loading…' : 'No channels yet — search above and tap Add'}</div>`
+      : `<div class="cn-queue">${channels}</div>`}
+  `;
+}
+
 function attachHandlers(urlFocused, selStart, selEnd) {
   const urlInput = document.getElementById('cn-url-input');
   const addBtn = document.getElementById('cn-add-btn');
@@ -322,6 +401,49 @@ function attachHandlers(urlFocused, selStart, selEnd) {
     }
     urlInput.onkeydown = (e) => { if (e.key === 'Enter') { addTrack(urlInput.value); urlInput.value = ''; } };
   }
+
+  // --- Tab bar ---
+  document.querySelectorAll('.cn-tab').forEach((el) => {
+    el.onclick = () => switchTab(el.getAttribute('data-tab'));
+  });
+
+  // --- Castbox tab ---
+  const cbSearch = document.getElementById('cb-search');
+  if (cbSearch) {
+    if (cbFocused && document.activeElement !== cbSearch) {
+      cbSearch.focus();
+    }
+    const doSearch = () => searchCastbox(cbSearch.value);
+    cbSearch.onkeydown = (e) => { if (e.key === 'Enter') doSearch(); };
+  }
+  const cbSearchBtn = document.getElementById('cb-search-btn');
+  if (cbSearchBtn) cbSearchBtn.onclick = () => searchCastbox(document.getElementById('cb-search')?.value || '');
+
+  document.querySelectorAll('.cb-add-channel').forEach((el) => {
+    el.addEventListener('click', (e) => {
+      e.stopPropagation();
+      addCastboxChannel({
+        feedUrl: el.getAttribute('data-feed'),
+        title: el.getAttribute('data-title'),
+        author: el.getAttribute('data-author'),
+        artwork: el.getAttribute('data-art'),
+      });
+    });
+  });
+  document.querySelectorAll('[data-ch-open]').forEach((el) => {
+    const go = () => openCastboxChannel(el.getAttribute('data-ch-open'));
+    el.addEventListener('click', (e) => { if (e.target.closest('[data-del-ch]')) return; go(); });
+    el.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); go(); } });
+  });
+  document.querySelectorAll('[data-del-ch]').forEach((el) => {
+    el.addEventListener('click', (e) => { e.stopPropagation(); removeCastboxChannel(el.getAttribute('data-del-ch')); });
+  });
+  document.querySelectorAll('.cb-play-ep').forEach((el) => {
+    el.addEventListener('click', (e) => { e.stopPropagation(); playCastboxEpisode(el.getAttribute('data-ch'), parseInt(el.getAttribute('data-i'), 10)); });
+  });
+  document.querySelectorAll('.cb-add-ep').forEach((el) => {
+    el.addEventListener('click', (e) => { e.stopPropagation(); addCastboxEpisodeToQueue(el.getAttribute('data-ch'), parseInt(el.getAttribute('data-i'), 10)); });
+  });
 
   const playBtn = document.getElementById('cn-play'); if (playBtn) playBtn.onclick = togglePlay;
   const prevBtn = document.getElementById('cn-prev'); if (prevBtn) prevBtn.onclick = prev;

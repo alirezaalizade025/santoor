@@ -225,3 +225,26 @@ html, body {
   .cn-np-play { width: 92px; height: 92px; }
   .cn-np-title { font-size: 22px; }
 }
+
+/* --- Tab bar --- */
+.cn-tabbar { display: flex; gap: 8px; margin: 14px 0 18px; }
+.cn-tab { flex: 1; font-family: var(--font-mono); font-size: 12px; letter-spacing: 0.04em; padding: 10px 0; border-radius: 9px; border: 1px solid var(--line); background: var(--bg-raised); color: var(--text-dim); cursor: pointer; transition: all 0.15s; }
+.cn-tab:hover { color: var(--text); }
+.cn-tab.active { background: var(--gold); color: #17161B; border-color: var(--gold); font-weight: 600; }
+
+/* --- Castbox view --- */
+.cb-art { width: 44px; height: 44px; border-radius: 8px; object-fit: cover; flex-shrink: 0; background: var(--line); border: 1px solid var(--line); }
+.cb-art-empty { background: repeating-linear-gradient(135deg, #2A2831, #2A2831 4px, #211F27 4px, #211F27 8px); }
+.cb-result-info { flex: 1; min-width: 0; }
+.cb-result .cn-queue-title, .cb-channel .cn-queue-title { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cb-result .cn-queue-dur, .cb-channel .cn-queue-dur { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cb-add-channel { flex-shrink: 0; }
+.cb-channel { cursor: pointer; }
+.cb-channel.active { border-color: var(--gold-dim); }
+.cb-del-channel { opacity: 1; }
+.cb-episode { display: flex; align-items: center; gap: 8px; padding-right: 8px; }
+.cb-episode .cn-queue-title { flex: 1; min-width: 0; }
+.cb-episode .cb-play-ep, .cb-episode .cb-add-ep { flex-shrink: 0; opacity: 1; }
+.cb-episode .cb-add-ep { border-color: var(--line); color: var(--text-dim); }
+.cb-episode .cb-add-ep:hover { background: var(--line); color: var(--text); }
+

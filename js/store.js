@@ -83,6 +83,16 @@ export const store = {
   volume: initialVolume, // per-device, not synced
   history: loadHistory(),   // recently played: [{id,title,host,url,at}], newest first, per-device
   historyOpen: false,       // recently-played section expanded
+
+  // Castbox tab state. The tab reuses the existing queue/player for playback;
+  // these fields only drive the search/selection UI.
+  activeTab: 'player',      // 'player' | 'castbox'
+  castboxChannels: [],      // selected channels: [{id,castbox_id,title,author,rss_url,artwork_url,description,created_at}]
+  castboxResults: [],       // last search results: [{id,title,author,artwork,feedUrl,description}]
+  castboxEpisodes: {},      // channelId -> [{title,url,type,durationSeconds,publishedAt}]
+  castboxLoading: false,    // true while a search/resolve is in flight
+  castboxQuery: '',         // current search input value (preserved across re-renders)
+  castboxOpenChannel: null, // channel row currently expanded to show episodes
 };
 
 // Recently-played history is a local, per-device list (not shared queue state),
