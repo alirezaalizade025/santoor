@@ -118,10 +118,37 @@ create policy "public update player_state" on player_state for update using (tru
 create policy "public insert player_state" on player_state for insert with check (true);
 
 -- ---------------------------------------------------------------------------
+-- Castbox channels: user-selected podcast channels surfaced in the Castbox tab.
+-- Mirrors the permissive (no-login-yet) policy used by playlists. The episode
+-- audio itself is stored as ordinary `tracks` rows (RSS enclosure URLs), so no
+-- separate episodes table is needed.
+-- ---------------------------------------------------------------------------
+create table if not exists castbox_channels (
+  id uuid primary key default gen_random_uuid(),
+  castbox_id text,
+  title text not null,
+  author text,
+  rss_url text not null,
+  artwork_url text,
+  description text,
+  created_at timestamptz not null default now()
+);
+
+alter table castbox_channels enable row level security;
+
+drop policy if exists "public read castbox_channels" on castbox_channels;
+drop policy if exists "public insert castbox_channels" on castbox_channels;
+drop policy if exists "public delete castbox_channels" on castbox_channels;
+create policy "public read castbox_channels" on castbox_channels for select using (true);
+create policy "public insert castbox_channels" on castbox_channels for insert with check (true);
+create policy "public delete castbox_channels" on castbox_channels for delete using (true);
+
+-- ---------------------------------------------------------------------------
 -- Realtime: after running this, go to Database → Replication and enable
--- realtime for `tracks`, `player_state`, AND `playlists`:
---   • tracks       → live queue adds/removes (also lets "Listen together" find
---                    a just-added track).
---   • player_state → live playback position ("Resume here" banner).
---   • playlists    → live playlist create/delete across devices.
+-- realtime for `tracks`, `player_state`, `playlists`, AND `castbox_channels`:
+--   • tracks          → live queue adds/removes (also lets "Listen together"
+--                       find a just-added track).
+--   • player_state    → live playback position ("Resume here" banner).
+--   • playlists       → live playlist create/delete across devices.
+--   • castbox_channels → live channel add/remove in the Castbox tab.
 -- ---------------------------------------------------------------------------
