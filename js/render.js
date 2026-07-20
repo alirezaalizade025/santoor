@@ -308,10 +308,10 @@ export function render() {
       </div>
     ` : ''}
   `;
-  attachHandlers();
+  attachHandlers(urlFocused, selStart, selEnd);
 }
 
-function attachHandlers() {
+function attachHandlers(urlFocused, selStart, selEnd) {
   const urlInput = document.getElementById('cn-url-input');
   const addBtn = document.getElementById('cn-add-btn');
   if (addBtn) addBtn.onclick = () => { addTrack(urlInput.value); urlInput.value = ''; };
