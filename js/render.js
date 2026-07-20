@@ -282,6 +282,7 @@ export function render() {
           </div>
         ` : ''}
       ` : ''}
+      ` : ''}
 
       ${store.activeTab === 'castbox' ? castboxView() : ''}
     </div>
