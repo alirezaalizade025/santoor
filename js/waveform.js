@@ -15,7 +15,7 @@
 //
 // The analyser writes bar heights directly to the DOM in a requestAnimationFrame
 // loop, decoupled from render()'s full innerHTML rebuilds.
-import { store, audio } from './store.js';
+import { store, audio } from "./store.js";
 
 let ctx = null;
 let analyser = null;
@@ -34,11 +34,14 @@ export function isWaveformActive() {
 export function initWaveformGraph() {
   if (ctx) return true;
   try {
-    if (typeof audio.captureStream !== 'function') return false;
+    if (typeof audio.captureStream !== "function") return false;
     const AC = window.AudioContext || window.webkitAudioContext;
     if (!AC) return false;
     ctx = new AC();
     const stream = audio.captureStream();
+    // Verify the stream has audio tracks before creating source.
+    if (!stream.getAudioTracks || stream.getAudioTracks().length === 0)
+      return false;
     streamSource = ctx.createMediaStreamSource(stream);
     analyser = ctx.createAnalyser();
     analyser.fftSize = 128; // -> 64 frequency bins, close to the 40 rendered bars
@@ -46,8 +49,10 @@ export function initWaveformGraph() {
     streamSource.connect(analyser); // analyser is a sink; nothing connects to destination
     return true;
   } catch (e) {
-    console.warn('Waveform analyser unavailable', e && e.message);
-    ctx = null; analyser = null; streamSource = null;
+    console.warn("Waveform analyser unavailable", e && e.message);
+    ctx = null;
+    analyser = null;
+    streamSource = null;
     return false;
   }
 }
@@ -55,12 +60,15 @@ export function initWaveformGraph() {
 // Called when playback begins. Starts the analyser RAF loop if a graph exists.
 export function startWaveform() {
   if (!analyser) return;
-  if (ctx && ctx.state === 'suspended') ctx.resume().catch(() => {});
+  if (ctx && ctx.state === "suspended") ctx.resume().catch(() => {});
   if (rafId == null) loop();
 }
 
 export function stopWaveform() {
-  if (rafId != null) { cancelAnimationFrame(rafId); rafId = null; }
+  if (rafId != null) {
+    cancelAnimationFrame(rafId);
+    rafId = null;
+  }
 }
 
 function loop() {
@@ -68,7 +76,7 @@ function loop() {
   if (!analyser || !dataArray) return;
   analyser.getByteFrequencyData(dataArray);
 
-  const bars = document.querySelectorAll('.cn-waveform .cn-bar');
+  const bars = document.querySelectorAll(".cn-waveform .cn-bar");
   if (bars.length === 0) return;
 
   let anySignal = false;
@@ -77,13 +85,13 @@ function loop() {
     const v = dataArray[Math.floor((i / bars.length) * bins)] || 0;
     if (v > 0) anySignal = true;
     const h = 6 + (v / 255) * 94; // 6%..100%
-    bars[i].style.height = h.toFixed(1) + '%';
+    bars[i].style.height = h.toFixed(1) + "%";
   }
 
   // First time we see real audio data (CORS-permissive source), mark the real
   // waveform active so render() stops drawing decorative bars.
   if (anySignal && !realSignalSeen) {
     realSignalSeen = true;
-    document.querySelector('.cn-waveform')?.classList.add('cn-waveform-live');
+    document.querySelector(".cn-waveform")?.classList.add("cn-waveform-live");
   }
 }

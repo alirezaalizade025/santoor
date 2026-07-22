@@ -29,10 +29,11 @@ async function podcastIndexAuth(): Promise<Record<string, string>> {
 }
 
 Deno.serve(async (req) => {
-  if (req.method === 'OPTIONS') return handleOptions();
-  if (req.method !== 'GET' && req.method !== 'POST') {
-    return json({ error: 'method not allowed' }, 405);
-  }
+  try {
+    if (req.method === 'OPTIONS') return handleOptions();
+    if (req.method !== 'GET' && req.method !== 'POST') {
+      return json({ error: 'method not allowed' }, 405);
+    }
 
   let q = '';
   if (req.method === 'GET') {
@@ -74,6 +75,10 @@ Deno.serve(async (req) => {
     return json({ feeds: mapped });
   } catch (e) {
     const msg = e instanceof Error ? e.message : 'search failed';
+    return json({ feeds: [], error: msg }, 500);
+  }
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : 'request handler failed';
     return json({ feeds: [], error: msg }, 500);
   }
 });
