@@ -411,7 +411,7 @@ function attachHandlers(urlFocused, selStart, selEnd) {
   // --- Castbox tab ---
   const cbSearch = document.getElementById('cb-search');
   if (cbSearch) {
-    if (cbFocused && document.activeElement !== cbSearch) {
+    if (document.activeElement === cbSearch) {
       cbSearch.focus();
     }
     const doSearch = () => searchCastbox(cbSearch.value);
